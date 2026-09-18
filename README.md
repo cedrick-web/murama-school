@@ -6,7 +6,7 @@ A bilingual (Kinyarwanda / English) school website and management platform for E
 
 - `frontend/` - React + TypeScript web application
 - `backend/` - Node.js + Express API
-- `database/` - database schema, migrations, and seed documentation
+- `database/` - MySQL schema and database documentation
 - `docs/` - architecture and project documentation
 
 ## Development rule
@@ -25,6 +25,20 @@ The frontend, backend, database, and media storage are designed to remain replac
 
 ## Current stage
 
-**Stage 1 - Foundation**
+**Stage 3 - Database foundation**
 
-Initial project structure and runnable frontend/backend foundation.
+The project now has an initial MySQL schema and backend database connection/health-check foundation.
+
+## Planned stages
+
+1. Foundation
+2. Public website
+3. Database foundation
+4. Authentication and RBAC
+5. Admin CMS
+6. Academic management
+7. Parent and student portals
+8. Timetable and attendance
+9. Communication and notifications
+10. Finance and reporting
+11. Production deployment, security, testing, and backups
