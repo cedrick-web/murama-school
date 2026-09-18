@@ -16,7 +16,8 @@
     "express": "latest",
     "helmet": "latest",
     "jsonwebtoken": "latest",
-    "morgan": "latest"
+    "morgan": "latest",
+    "mysql2": "latest"
   },
   "devDependencies": {
     "@types/bcryptjs": "latest",
