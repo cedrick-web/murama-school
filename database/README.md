@@ -1,16 +1,38 @@
 # Murama School Database
 
-The application uses MySQL as the planned relational database.
+The application uses MySQL as its relational database.
 
-Database work will be introduced in a separate verified stage. Do not create production tables manually yet.
+## Initial local setup
 
-Planned first database milestone:
+1. Make sure MySQL is running.
+2. Create the local environment file from `backend/.env.example`:
+   `backend/.env`
+3. Run `database/schema.sql` using MySQL or phpMyAdmin.
+4. Verify that the `murama_school` database and initial tables were created.
+5. Start the backend and open:
+   `http://localhost:5000/api/health/database`
 
-1. Create `murama_school`
-2. Add migration system
-3. Add users and roles
-4. Connect backend to MySQL
-5. Run a database health check
-6. Seed a development administrator
+A successful connection returns HTTP 200 with `"status": "connected"`.
 
-Secrets and real school data must never be committed to GitHub.
+## Initial schema
+
+The first schema establishes:
+
+- users and roles
+- school settings
+- academic years and terms
+- classes and streams
+- subjects
+- news
+- events
+- announcements
+- gallery images/videos
+
+The schema is deliberately limited to foundational entities. Academic marks, attendance, timetables, fees, parent/student relationships, and other workflows will be introduced in later verified stages.
+
+## Security
+
+- Never commit `backend/.env`.
+- Never commit real passwords, JWT secrets, or production credentials.
+- Never store uploaded media files inside Git.
+- Use migrations for future schema changes rather than editing production tables manually.
