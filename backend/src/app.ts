@@ -4,6 +4,8 @@ import express from 'express'
 import helmet from 'helmet'
 import morgan from 'morgan'
 
+import { checkDatabaseConnection } from './config/database.js'
+
 dotenv.config()
 
 const app = express()
@@ -27,6 +29,26 @@ app.get('/api/health', (_req, res) => {
     service: 'murama-school-api',
     status: 'healthy',
   })
+})
+
+app.get('/api/health/database', async (_req, res) => {
+  try {
+    await checkDatabaseConnection()
+
+    res.json({
+      success: true,
+      service: 'murama-school-api',
+      database: 'mysql',
+      status: 'connected',
+    })
+  } catch {
+    res.status(503).json({
+      success: false,
+      service: 'murama-school-api',
+      database: 'mysql',
+      status: 'unavailable',
+    })
+  }
 })
 
 export default app
