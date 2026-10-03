@@ -36,3 +36,27 @@ The schema is deliberately limited to foundational entities. Academic marks, att
 - Never commit real passwords, JWT secrets, or production credentials.
 - Never store uploaded media files inside Git.
 - Use migrations for future schema changes rather than editing production tables manually.
+
+
+## XAMPP complete import
+
+For a fresh XAMPP/MySQL setup, the complete import file is:
+
+`database/xampp/murama_school_xampp.sql`
+
+### Import with phpMyAdmin
+
+1. Start **MySQL** in XAMPP.
+2. Open `http://localhost/phpmyadmin`.
+3. Open the **Import** tab.
+4. Select `database/xampp/murama_school_xampp.sql`.
+5. Click **Import**.
+6. Confirm that the `murama_school` database contains the tables.
+
+The extended schema includes the foundation plus users/roles, teachers, students, parents, enrollments, subjects, assessments, results, grades, report cards, attendance, timetable, fees, invoices, payments, messages, notifications, audit logs, news, events, announcements, and gallery storage metadata.
+
+The SQL file does **not** contain real admin passwords. Authentication accounts will be created by the backend so passwords are hashed and never committed to GitHub.
+
+### Important
+
+XAMPP is providing MySQL/MariaDB and phpMyAdmin. The Murama School application itself remains a Node.js/Express backend and React frontend. Do not copy the Node.js project into XAMPP's `htdocs` folder.
