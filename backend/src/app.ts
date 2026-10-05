@@ -5,6 +5,8 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 
 import { checkDatabaseConnection } from './config/database.js'
+import authRoutes from './routes/auth.routes.js'
+import adminRoutes from './routes/admin.routes.js'
 
 dotenv.config()
 
@@ -14,6 +16,9 @@ app.use(helmet())
 app.use(cors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' }))
 app.use(express.json({ limit: '1mb' }))
 app.use(morgan('dev'))
+
+app.use('/api/auth', authRoutes)
+app.use('/api/admin', adminRoutes)
 
 app.get('/', (_req, res) => {
   res.json({
