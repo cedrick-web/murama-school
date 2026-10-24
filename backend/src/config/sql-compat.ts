@@ -141,11 +141,30 @@ function rewriteMySqlAggregates(input: string): string {
 }
 
 function quoteCaseSensitiveAliases(input: string): string {
-  return input.replace(/\bAS\s+([a-z_][\w]*)/gi, (statement, alias: string) => (
-    alias === alias.toLowerCase() ? statement : 'AS "' + alias + '"'
-  ))
-}
+  const aliases: string[] = []
+  let output = input.replace(/\bAS\s+([a-z_][\w]*)/gi, (statement, alias: string) => {
+    if (alias === alias.toLowerCase()) return statement
+    aliases.push(alias)
+    return 'AS "' + alias + '"'
+  })
 
+  // PostgreSQL folds unquoted identifiers to lowercase, including aliases used
+  // later in ORDER BY/GROUP BY/HAVING. Quote those references consistently.
+  const clauseIndex = output.search(/\b(?:ORDER\s+BY|GROUP\s+BY|HAVING)\b/i)
+  if (clauseIndex < 0 || aliases.length === 0) return output
+
+  const head = output.slice(0, clauseIndex)
+  let tail = output.slice(clauseIndex)
+  for (const alias of aliases) {
+    const escaped = alias.replace(/[.*+?^$()|[\]\\]/g, '\\$&')
+    tail = tail.replace(
+      new RegExp('(?<![A-Za-z0-9_".])' + escaped + '(?![A-Za-z0-9_"])', 'g'),
+      '"' + alias + '"',
+    )
+  }
+  output = head + tail
+  return output
+}
 function numberForNumericField(key: string, value: unknown): unknown {
   if (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value)) return value
   const numericKey = /^(id|.*Id|.*Count|.*Score|.*Position|.*Percentage|.*Amount|.*Due|.*Paid|.*Total|.*Outstanding|.*Items|.*No|.*Number|.*Rank)$/i.test(key)
