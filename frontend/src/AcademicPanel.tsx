@@ -80,7 +80,7 @@ async function request<T extends AcademicResponse>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(`${(import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')}${path}`, {
+  const response = await fetch(`${(import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/$/, '')}${path}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
