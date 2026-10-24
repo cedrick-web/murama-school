@@ -171,8 +171,8 @@ const sectionDetails: Record<AdminSection, { title: string; description: string 
 const sectionPaths: Record<AdminSection, string> = {
   dashboard: '/admin/dashboard',
   users: '/admin/users',
-  academics: '/admin/academics',
-  students: '/admin/students',
+  academics: '/admin/academics/years',
+  students: '/admin/students/roster',
   operations: '/admin/operations/attendance',
   settings: '/admin/settings',
   announcements: '/admin/announcements',
