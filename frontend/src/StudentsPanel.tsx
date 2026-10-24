@@ -124,7 +124,7 @@ async function request<T extends PeopleResponse>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')
+  const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/$/, '')
   const response = await fetch(`${apiUrl}${path}`, {
     ...options,
     headers: {
