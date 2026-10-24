@@ -4,7 +4,7 @@ Murama School uses Supabase Auth to verify the provider identity and Supabase Po
 
 ## Configure the provider
 
-1. Create/select the Supabase project and open **Authentication → Providers → Google**.
+1. Open the existing **muramaSDMS** project (`ilmvmqxmasgasrtokjmz`) and then **Authentication → Providers → Google**.
 2. Configure Google OAuth client credentials as directed by Supabase and enable the provider.
 3. In **Authentication → URL Configuration**, add the local frontend URL and the exact production callback/redirect destinations used by the Google sign-in flow. Keep redirect entries restricted to domains owned by the school.
 4. Configure the backend environment variables from **backend/.env.example**: **SUPABASE_URL**, **SUPABASE_PUBLISHABLE_KEY**, **SUPABASE_DB_URL**, and **JWT_SECRET**.
