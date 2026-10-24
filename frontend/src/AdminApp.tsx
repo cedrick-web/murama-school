@@ -213,7 +213,7 @@ export default function AdminApp() {
       setError('')
     }
     window.addEventListener('popstate', handleRouteChange)
-    if (window.location.pathname.replace(/\/+$/, '') === '/admin') {
+    if (window.location.pathname.replace(/\/+$/, '') === '/admin' && !window.location.search) {
       window.history.replaceState({}, '', sectionPaths.dashboard)
     }
     return () => window.removeEventListener('popstate', handleRouteChange)
