@@ -107,3 +107,18 @@ export const pool = {
 export async function checkDatabaseConnection(): Promise<void> {
   await requireClient().unsafe('SELECT 1 AS connected')
 }
+
+
+/** Identify database configuration/transport failures as retryable service-unavailable errors. */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === 'DB_NOT_CONFIGURED'
+    || code === 'ECONNREFUSED'
+    || code === 'ECONNRESET'
+    || code === 'ETIMEDOUT'
+    || code === 'CONNECT_TIMEOUT'
+    || code === '08000'
+    || code === '08003'
+    || code === '08006'
+    || code === '53300'
+}
