@@ -2,6 +2,13 @@ import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react'
 import './operations.css'
 
 type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages'
+
+const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages']
+
+function operationsTabFromPath(pathname: string): Tab {
+  const segment = pathname.replace(/\/+$/, '').split('/')[3]
+  return operationTabs.includes(segment as Tab) ? segment as Tab : 'attendance'
+}
 type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
 type AssessmentType = 'TEST' | 'QUIZ' | 'ASSIGNMENT' | 'MIDTERM' | 'FINAL' | 'PRACTICAL' | 'OTHER'
 type PaymentMethod = 'CASH' | 'BANK' | 'MOBILE_MONEY' | 'CARD' | 'OTHER'
@@ -83,7 +90,21 @@ function State({ loading, error, empty, retry }: { loading?: boolean; error?: st
 }
 
 export default function OperationsPanel({ token }: { token: string }) {
-  const [tab, setTab] = useState<Tab>('attendance')
+  const [tab, setTab] = useState<Tab>(() => operationsTabFromPath(window.location.pathname))
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (window.location.pathname.startsWith('/admin/operations')) setTab(operationsTabFromPath(window.location.pathname))
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    return () => window.removeEventListener('popstate', handleRouteChange)
+  }, [])
+
+  function selectTab(nextTab: Tab) {
+    const nextPath = '/admin/operations/' + nextTab
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath)
+    setTab(nextTab)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
   const tabs: Array<{ id: Tab; title: string; sub: string; number: string }> = [
     { id: 'attendance', title: 'Attendance', sub: 'Daily registers', number: '01' },
     { id: 'gradebook', title: 'Gradebook', sub: 'Assessments & reports', number: '02' },
@@ -92,10 +113,10 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
   ]
   return <div className="operations-workspace">
-    <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the existing MySQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
+    <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
     <div className="operations-layout">
       <nav className="operations-tabs" aria-label="Operational modules">
-        {tabs.map((item) => <button key={item.id} type="button" className={'operations-tab' + (tab === item.id ? ' is-active' : '')} aria-current={tab === item.id ? 'page' : undefined} onClick={() => setTab(item.id)}><span className="operations-tab-number">{item.number}</span><span><strong>{item.title}</strong><small>{item.sub}</small></span><span className="operations-tab-arrow">→</span></button>)}
+        {tabs.map((item) => <button key={item.id} type="button" className={'operations-tab' + (tab === item.id ? ' is-active' : '')} aria-current={tab === item.id ? 'page' : undefined} onClick={() => selectTab(item.id)}><span className="operations-tab-number">{item.number}</span><span><strong>{item.title}</strong><small>{item.sub}</small></span><span className="operations-tab-arrow">→</span></button>)}
         <p className="operations-safety-note">Saved changes are written to the school database. The backend validates records and permissions; unavailable data is never replaced with sample values.</p>
       </nav>
       <section className="operations-content">

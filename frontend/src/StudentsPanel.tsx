@@ -72,6 +72,10 @@ interface PeopleResponse {
 }
 
 type View = 'roster' | 'enrollments'
+
+function studentViewFromPath(pathname: string): View {
+  return pathname.replace(/\/+$/, '').endsWith('/enrollments') ? 'enrollments' : 'roster'
+}
 type StudentForm = {
   firstName: string
   lastName: string
@@ -149,7 +153,7 @@ function active(value: boolean | number): boolean {
 }
 
 export default function StudentsPanel({ token }: { token: string }) {
-  const [view, setView] = useState<View>('roster')
+  const [view, setView] = useState<View>(() => studentViewFromPath(window.location.pathname))
   const [students, setStudents] = useState<Student[]>([])
   const [years, setYears] = useState<AcademicYear[]>([])
   const [terms, setTerms] = useState<AcademicTerm[]>([])
@@ -163,6 +167,20 @@ export default function StudentsPanel({ token }: { token: string }) {
   const [enrollmentForm, setEnrollmentForm] = useState<EnrollmentForm>(emptyEnrollment)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (window.location.pathname.startsWith('/admin/students')) {
+        setView(studentViewFromPath(window.location.pathname))
+      }
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    const path = window.location.pathname.replace(/\/+$/, '')
+    if (path === '/admin/students') {
+      window.history.replaceState({}, '', '/admin/students/roster' + window.location.search)
+    }
+    return () => window.removeEventListener('popstate', handleRouteChange)
+  }, [])
 
   async function loadData() {
     const [studentResult, yearResult, termResult, classResult, streamResult, enrollmentResult] = await Promise.all([
@@ -335,6 +353,8 @@ export default function StudentsPanel({ token }: { token: string }) {
             className={view === value ? 'is-selected' : ''}
             aria-current={view === value ? 'page' : undefined}
             onClick={() => {
+              const nextPath = '/admin/students/' + value
+              if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath)
               setView(value)
               setError('')
               setMessage('')

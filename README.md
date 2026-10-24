@@ -4,6 +4,26 @@ A bilingual school website and management system for Ecole Secondaire de Murama.
 
 ## Architecture
 
+## Addressable administration routes
+
+The administration UI uses browser-history routes, including direct-link and refresh support for these pages:
+
+- `/admin/dashboard`
+- `/admin/students`
+- `/admin/academics`
+- `/admin/users`
+- `/admin/operations/attendance`
+- `/admin/operations/gradebook`
+- `/admin/operations/timetable`
+- `/admin/operations/finance`
+- `/admin/operations/messages`
+- `/admin/announcements`
+- `/admin/activity`
+- `/admin/settings`
+
+The Netlify SPA fallback serves the application for direct visits to these paths. Each admin module continues to use the authenticated Express API; the database credentials remain server-only.
+
+
 - **Frontend:** React + TypeScript + Vite, public school information, admin dashboard, academic records, attendance, gradebook/report cards, timetable, finance and messaging screens.
 - **API:** Node.js + Express. Existing authenticated route contracts and school business rules remain in the API layer.
 - **Primary database:** Supabase-hosted PostgreSQL. All application API reads/writes and transaction workflows use the server-side PostgreSQL connection.

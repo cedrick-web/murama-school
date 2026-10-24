@@ -6,20 +6,29 @@ dotenv.config()
 
 const connectionString = process.env.SUPABASE_DB_URL?.trim() || process.env.DATABASE_URL?.trim()
 
-if (!connectionString) {
-  throw new Error(
-    'Missing SUPABASE_DB_URL. Configure the Supabase PostgreSQL connection string in backend/.env. ' +
-    'Use a server-side database connection string; never put database credentials in frontend environment variables.',
-  )
-}
+type PostgresClient = ReturnType<typeof postgres>
+type ReservedSqlConnection = Awaited<ReturnType<PostgresClient['reserve']>>
 
-const client = postgres(connectionString, {
-  max: Number(process.env.DB_POOL_SIZE ?? 5),
-  idle_timeout: 20,
-  connect_timeout: 10,
-  // Compatible with Supabase poolers that do not support persistent prepared statements.
-  prepare: false,
-})
+// Let the API boot without database credentials so health checks can explain the configuration problem.
+const client: PostgresClient | null = connectionString
+  ? postgres(connectionString, {
+      max: Number(process.env.DB_POOL_SIZE ?? (process.env.NETLIFY ? '1' : '5')),
+      idle_timeout: 20,
+      connect_timeout: 10,
+      ssl: 'require',
+      prepare: false,
+    })
+  : null
+
+function requireClient(): PostgresClient {
+  if (!client) {
+    throw Object.assign(
+      new Error('Database connection is not configured. Set SUPABASE_DB_URL in the server runtime environment.'),
+      { code: 'DB_NOT_CONFIGURED' },
+    )
+  }
+  return client
+}
 
 type RawExecutor = {
   unsafe(query: string, parameters?: never[]): Promise<Array<Record<string, unknown>>>
@@ -55,7 +64,7 @@ export interface PoolConnection {
 }
 
 class ReservedConnection implements PoolConnection {
-  constructor(private readonly connection: Awaited<ReturnType<typeof client.reserve>>) {}
+  constructor(private readonly connection: ReservedSqlConnection) {}
 
   execute(query: string, values: readonly unknown[] = []): Promise<[unknown, unknown]> {
     return run(this.connection as unknown as RawExecutor, query, values)
@@ -85,16 +94,31 @@ class ReservedConnection implements PoolConnection {
  */
 export const pool = {
   execute(query: string, values: readonly unknown[] = []): Promise<[unknown, unknown]> {
-    return run(client as unknown as RawExecutor, query, values)
+    return run(requireClient() as unknown as RawExecutor, query, values)
   },
   async getConnection(): Promise<PoolConnection> {
-    return new ReservedConnection(await client.reserve())
+    return new ReservedConnection(await requireClient().reserve())
   },
   async end(): Promise<void> {
-    await client.end({ timeout: 5 })
+    if (client) await client.end({ timeout: 5 })
   },
 }
 
 export async function checkDatabaseConnection(): Promise<void> {
-  await client.unsafe('SELECT 1 AS connected')
+  await requireClient().unsafe('SELECT 1 AS connected')
+}
+
+
+/** Identify database configuration/transport failures as retryable service-unavailable errors. */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code
+  return code === 'DB_NOT_CONFIGURED'
+    || code === 'ECONNREFUSED'
+    || code === 'ECONNRESET'
+    || code === 'ETIMEDOUT'
+    || code === 'CONNECT_TIMEOUT'
+    || code === '08000'
+    || code === '08003'
+    || code === '08006'
+    || code === '53300'
 }

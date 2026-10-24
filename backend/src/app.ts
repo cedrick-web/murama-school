@@ -30,32 +30,39 @@ app.get('/', (_req, res) => {
   })
 })
 
-app.get('/api/health', (_req, res) => {
-  res.json({
-    success: true,
-    service: 'murama-school-api',
-    status: 'healthy',
-  })
+app.get('/api/health', async (_req, res) => {
+  try {
+    await checkDatabaseConnection()
+    res.json({ success: true, service: 'murama-school-api', status: 'healthy', database: 'connected' })
+  } catch {
+    res.status(503).json({
+      success: false,
+      service: 'murama-school-api',
+      status: 'degraded',
+      database: 'unavailable',
+      message: 'The API is running, but its database connection is not ready. Configure SUPABASE_DB_URL in the server runtime.',
+    })
+  }
 })
 
 app.get('/api/health/database', async (_req, res) => {
   try {
     await checkDatabaseConnection()
-
-    res.json({
-      success: true,
-      service: 'murama-school-api',
-      database: 'supabase-postgres',
-      status: 'connected',
-    })
+    res.json({ success: true, service: 'murama-school-api', database: 'supabase-postgres', status: 'connected' })
   } catch {
     res.status(503).json({
       success: false,
       service: 'murama-school-api',
       database: 'supabase-postgres',
       status: 'unavailable',
+      message: 'Database connection is not configured or cannot be reached.',
     })
   }
+})
+
+// Keep unknown API requests machine-readable instead of falling through to HTML.
+app.use('/api', (_req, res) => {
+  res.status(404).json({ success: false, message: 'API endpoint not found' })
 })
 
 export default app

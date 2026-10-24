@@ -1,6 +1,6 @@
 import { Router } from 'express'
 
-import { pool } from '../config/database.js'
+import { isDatabaseUnavailable, pool } from '../config/database.js'
 
 const router = Router()
 
@@ -32,10 +32,7 @@ router.get('/school', async (_req, res) => {
     res.json({ success: true, school: settings })
   } catch (error) {
     console.error('Unable to load public school details', error)
-    res.status(500).json({
-      success: false,
-      message: 'Unable to load school details',
-    })
+    res.status(isDatabaseUnavailable(error) ? 503 : 500).json({ success: false, message: isDatabaseUnavailable(error) ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to load school details' })
   }
 })
 
@@ -48,10 +45,7 @@ router.get('/announcements', async (_req, res) => {
     res.json({ success: true, announcements: rows })
   } catch (error) {
     console.error('Unable to load public announcements', error)
-    res.status(500).json({
-      success: false,
-      message: 'Unable to load announcements',
-    })
+    res.status(isDatabaseUnavailable(error) ? 503 : 500).json({ success: false, message: isDatabaseUnavailable(error) ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to load announcements' })
   }
 })
 

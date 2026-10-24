@@ -2,7 +2,7 @@ import { Router } from 'express'
 import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
 
-import { pool } from '../config/database.js'
+import { isDatabaseUnavailable, pool } from '../config/database.js'
 import academicRoutes from './academic.routes.js'
 import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
@@ -84,6 +84,10 @@ function fail(
   action: string,
   error: unknown,
 ): void {
+  if (isDatabaseUnavailable(error)) {
+    res.status(503).json({ success: false, message: 'The school database is not configured or is temporarily unavailable.' })
+    return
+  }
   const code = (error as { code?: string } | null)?.code
   if (code === 'ER_DUP_ENTRY' || code === '23505') {
     res.status(409).json({ success: false, message: 'A record with those details already exists' })

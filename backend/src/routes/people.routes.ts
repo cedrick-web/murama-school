@@ -4,7 +4,7 @@ import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
 import bcrypt from 'bcryptjs'
 
-import { pool } from '../config/database.js'
+import { isDatabaseUnavailable, pool } from '../config/database.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 
 const router = Router()
@@ -178,6 +178,10 @@ function parseEnrollment(input: Record<string, unknown>): EnrollmentInput | null
 }
 
 function reportFailure(res: Response, action: string, error: unknown): void {
+  if (isDatabaseUnavailable(error)) {
+    res.status(503).json({ success: false, message: 'The school database is not configured or is temporarily unavailable.' })
+    return
+  }
   const code = (error as { code?: string } | null)?.code
   if (code === 'ER_DUP_ENTRY' || code === '23505') {
     res.status(409).json({

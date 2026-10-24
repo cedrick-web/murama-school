@@ -1,6 +1,7 @@
 import { Router } from 'express'
 
 import { getUserById, login, loginWithVerifiedEmail } from '../services/auth.service.js'
+import { isDatabaseUnavailable } from '../config/database.js'
 import { SupabaseAuthConfigurationError, verifyGoogleAccessToken } from '../services/supabase-auth.service.js'
 import { createRateLimiter } from '../middleware/rate-limit.js'
 import {
@@ -43,10 +44,11 @@ router.post('/login', async (req, res) => {
       token: signAccessToken(result.user),
       user: result.user,
     })
-  } catch {
-    res.status(500).json({
+  } catch (error) {
+    const unavailable = isDatabaseUnavailable(error)
+    res.status(unavailable ? 503 : 500).json({
       success: false,
-      message: 'Unable to complete login',
+      message: unavailable ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to complete login',
     })
   }
 })
@@ -90,6 +92,10 @@ router.post('/google', createRateLimiter(15 * 60 * 1000, 10), async (req, res) =
       res.status(503).json({ success: false, message: 'Google sign-in is not configured on the server yet' })
       return
     }
+    if (isDatabaseUnavailable(error)) {
+      res.status(503).json({ success: false, message: 'The school database is not configured or is temporarily unavailable.' })
+      return
+    }
     console.error('Google sign-in verification failed', error)
     res.status(502).json({ success: false, message: 'Unable to verify Google sign-in with Supabase' })
   }
@@ -108,10 +114,11 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res) => {
     }
 
     res.json({ success: true, user })
-  } catch {
-    res.status(500).json({
+  } catch (error) {
+    const unavailable = isDatabaseUnavailable(error)
+    res.status(unavailable ? 503 : 500).json({
       success: false,
-      message: 'Unable to load the current user',
+      message: unavailable ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to load the current user',
     })
   }
 })

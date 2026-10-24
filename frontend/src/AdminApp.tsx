@@ -168,6 +168,24 @@ const sectionDetails: Record<AdminSection, { title: string; description: string 
   activity: { title: 'Audit activity', description: 'Review recorded changes made through the school system.' },
 }
 
+const sectionPaths: Record<AdminSection, string> = {
+  dashboard: '/admin/dashboard',
+  users: '/admin/users',
+  academics: '/admin/academics/years',
+  students: '/admin/students/roster',
+  operations: '/admin/operations/attendance',
+  settings: '/admin/settings',
+  announcements: '/admin/announcements',
+  activity: '/admin/activity',
+}
+
+function sectionFromPath(pathname: string): AdminSection {
+  const path = pathname.replace(/\/+$/, '') || '/admin'
+  if (path === '/admin' || path === '/admin/dashboard') return 'dashboard'
+  const segment = path.match(/^\/admin\/([^/]+)/)?.[1] as AdminSection | undefined
+  return segment && segment in sectionPaths ? segment : 'dashboard'
+}
+
 export default function AdminApp() {
   const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -180,13 +198,35 @@ export default function AdminApp() {
   const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL')
   const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
   const [busyUserId, setBusyUserId] = useState<number | null>(null)
-  const [section, setSection] = useState<AdminSection>('dashboard')
+  const [section, setSection] = useState<AdminSection>(() => sectionFromPath(window.location.pathname))
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [oauthBusy, setOauthBusy] = useState(false)
   const [oauthProcessing, setOauthProcessing] = useState(() => hasGoogleCallback())
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setSection(sectionFromPath(window.location.pathname))
+      setMobileNavOpen(false)
+      setError('')
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    if (window.location.pathname.replace(/\/+$/, '') === '/admin' && !window.location.search) {
+      window.history.replaceState({}, '', sectionPaths.dashboard)
+    }
+    return () => window.removeEventListener('popstate', handleRouteChange)
+  }, [])
+
+  function navigateSection(nextSection: AdminSection) {
+    const nextPath = sectionPaths[nextSection]
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath)
+    setSection(nextSection)
+    setError('')
+    setMobileNavOpen(false)
+    window.scrollTo({ top: 0, behavior: 'auto' })
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -442,7 +482,7 @@ export default function AdminApp() {
 
         <nav className="workspace-navigation">
           <span className="workspace-nav-label">OVERVIEW</span>
-          <button type="button" className={'workspace-nav-item' + (section === 'dashboard' ? ' is-active' : '')} aria-current={section === 'dashboard' ? 'page' : undefined} onClick={() => { setSection('dashboard'); setError(''); setMobileNavOpen(false) }}>
+          <button type="button" className={'workspace-nav-item' + (section === 'dashboard' ? ' is-active' : '')} aria-current={section === 'dashboard' ? 'page' : undefined} onClick={() => { navigateSection('dashboard') }}>
             <WorkspaceIcon name="dashboard" /><span>Dashboard</span><span className="workspace-nav-shortcut">↵</span>
           </button>
 
@@ -452,7 +492,7 @@ export default function AdminApp() {
             ['academics', 'Academic structure'],
             ['users', 'Users & access'],
           ] as const).map(([value, label]) => (
-            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { setSection(value); setError(''); setMobileNavOpen(false) }}>
+            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { navigateSection(value) }}>
               <WorkspaceIcon name={value} /><span>{label}</span>
             </button>
           ))}
@@ -464,7 +504,7 @@ export default function AdminApp() {
             ['activity', 'Audit activity'],
             ['settings', 'School settings'],
           ] as const).map(([value, label]) => (
-            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { setSection(value); setError(''); setMobileNavOpen(false) }}>
+            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { navigateSection(value) }}>
               <WorkspaceIcon name={value} /><span>{label}</span>
             </button>
           ))}
@@ -491,7 +531,7 @@ export default function AdminApp() {
             <button type="button" className="workspace-menu-toggle" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
             </button>
-            <div className="workspace-breadcrumb"><span>Murama School</span><span aria-hidden="true">/</span><strong>Administration</strong></div>
+            <div className="workspace-breadcrumb"><span>Murama School</span><span aria-hidden="true">/</span><strong>{activeSection.title}</strong></div>
           </div>
           <div className="workspace-topbar-right">
             <span className="workspace-access-badge"><span />ADMIN WORKSPACE</span>
@@ -508,7 +548,7 @@ export default function AdminApp() {
           {error && <p className="admin-alert workspace-global-alert" role="alert">{error}</p>}
 
           {section === 'dashboard' && token && (
-            <DashboardPanel token={token} userName={displayName} onNavigate={(nextSection) => { setSection(nextSection); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+            <DashboardPanel token={token} userName={displayName} onNavigate={(nextSection) => navigateSection(nextSection)} />
           )}
           {section === 'users' && (
             <>
