@@ -357,7 +357,8 @@ function App() {
   )
 }
 
-const RootApp = window.location.pathname.replace(/\/+$/, '') === '/admin' ? AdminApp : App
+const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
+const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
