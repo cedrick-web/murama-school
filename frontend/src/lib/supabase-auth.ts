@@ -25,7 +25,6 @@ export interface VerifiedSchoolLogin {
 }
 
 const verifierKey = 'murama-google-pkce-verifier'
-const stateKey = 'murama-google-oauth-state'
 
 function getSupabaseConfig() {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '')
@@ -54,10 +53,8 @@ async function createCodeChallenge(verifier: string): Promise<string> {
 export async function startGoogleSignIn(): Promise<void> {
   const config = getSupabaseConfig()
   const verifier = secureRandomToken()
-  const state = secureRandomToken()
   const challenge = await createCodeChallenge(verifier)
   sessionStorage.setItem(verifierKey, verifier)
-  sessionStorage.setItem(stateKey, state)
 
   const redirectTo = new URL('/admin', window.location.origin).toString()
   const authorizeUrl = new URL(config.url + '/auth/v1/authorize')
@@ -65,21 +62,18 @@ export async function startGoogleSignIn(): Promise<void> {
   authorizeUrl.searchParams.set('redirect_to', redirectTo)
   authorizeUrl.searchParams.set('code_challenge', challenge)
   authorizeUrl.searchParams.set('code_challenge_method', 's256')
-  authorizeUrl.searchParams.set('state', state)
   authorizeUrl.searchParams.set('scope', 'openid email profile')
   authorizeUrl.searchParams.set('apikey', config.publishableKey)
   window.location.assign(authorizeUrl.toString())
 }
 
-export async function finishGoogleSignIn(code: string, returnedState: string | null): Promise<VerifiedSchoolLogin> {
+export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLogin> {
   const config = getSupabaseConfig()
   const verifier = sessionStorage.getItem(verifierKey)
-  const expectedState = sessionStorage.getItem(stateKey)
   sessionStorage.removeItem(verifierKey)
-  sessionStorage.removeItem(stateKey)
 
-  if (!verifier || !expectedState || !returnedState || returnedState !== expectedState) {
-    throw new Error('Google sign-in could not be verified. Please start again.')
+  if (!verifier) {
+    throw new Error('The Google sign-in session is missing or expired. Please start again.')
   }
 
   const tokenResponse = await fetch(config.url + '/auth/v1/token?grant_type=pkce', {
