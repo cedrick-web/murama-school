@@ -1,3 +1,5 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+
 export interface SchoolUser {
   id: number
   firstName: string
@@ -7,11 +9,7 @@ export interface SchoolUser {
   role: 'ADMIN' | 'HEADTEACHER' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'STAFF'
 }
 
-interface SupabaseTokenResponse {
-  access_token?: string
-}
-
-export interface VerifiedSchoolLogin {
+interface VerifiedSchoolLogin {
   success: boolean
   token: string
   user: SchoolUser
@@ -24,8 +22,6 @@ export interface VerifiedSchoolLogin {
   message?: string
 }
 
-const verifierKey = 'murama-google-pkce-verifier'
-
 function getSupabaseConfig() {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/+$/, '')
   const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
@@ -35,93 +31,88 @@ function getSupabaseConfig() {
   return { url, publishableKey }
 }
 
-function base64UrlEncode(bytes: Uint8Array): string {
-  let binary = ''
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+let client: SupabaseClient | null = null
+
+function getSupabaseClient(): SupabaseClient {
+  if (client) return client
+  const config = getSupabaseConfig()
+  client = createClient(config.url, config.publishableKey, {
+    auth: {
+      flowType: 'pkce',
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+      storage: window.sessionStorage,
+    },
+  })
+  return client
 }
 
-function secureRandomToken(): string {
-  return base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)))
-}
-
-async function createCodeChallenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  return base64UrlEncode(new Uint8Array(digest))
+function profileFor(user: {
+  id: string
+  email?: string
+  user_metadata?: Record<string, unknown>
+}) {
+  const metadata = user.user_metadata ?? {}
+  const name = metadata.full_name ?? metadata.name
+  const image = metadata.avatar_url ?? metadata.picture
+  return {
+    id: user.id,
+    email: user.email?.trim().toLowerCase() ?? '',
+    displayName: typeof name === 'string' && name.trim() ? name.trim().slice(0, 160) : user.email ?? '',
+    avatarUrl: typeof image === 'string' && /^https:\/\//i.test(image) ? image.slice(0, 1000) : null,
+  }
 }
 
 export async function startGoogleSignIn(): Promise<void> {
-  const config = getSupabaseConfig()
-  const verifier = secureRandomToken()
-  const challenge = await createCodeChallenge(verifier)
-  sessionStorage.setItem(verifierKey, verifier)
-
+  const supabase = getSupabaseClient()
   const redirectTo = new URL('/admin', window.location.origin).toString()
-  const authorizeUrl = new URL(config.url + '/auth/v1/authorize')
-  authorizeUrl.searchParams.set('provider', 'google')
-  authorizeUrl.searchParams.set('redirect_to', redirectTo)
-  authorizeUrl.searchParams.set('code_challenge', challenge)
-  authorizeUrl.searchParams.set('code_challenge_method', 's256')
-  authorizeUrl.searchParams.set('scope', 'openid email profile')
-  authorizeUrl.searchParams.set('apikey', config.publishableKey)
-  window.location.assign(authorizeUrl.toString())
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      scopes: 'openid email profile',
+      queryParams: { access_type: 'online', prompt: 'select_account' },
+    },
+  })
+  if (error) throw new Error('Unable to start Google sign-in: ' + error.message)
 }
 
 export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLogin> {
-  const config = getSupabaseConfig()
-  const verifier = sessionStorage.getItem(verifierKey)
-  sessionStorage.removeItem(verifierKey)
-
-  if (!verifier) {
-    throw new Error('The Google sign-in session is missing or expired. Please start again.')
-  }
-
-  const tokenResponse = await fetch(config.url + '/auth/v1/token?grant_type=pkce', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: config.publishableKey },
-    body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
-  })
-  const tokenBody = await tokenResponse.json().catch(() => null) as SupabaseTokenResponse | null
-  if (!tokenResponse.ok || !tokenBody?.access_token) {
+  if (!code.trim()) throw new Error('The Google sign-in code is missing. Please start sign-in again.')
+  const supabase = getSupabaseClient()
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  if (error || !data.session?.access_token || !data.user) {
     throw new Error('Supabase could not complete Google sign-in. Check the provider and redirect URL configuration.')
   }
 
+  const profile = profileFor(data.user)
   const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
   const response = await fetch(apiUrl + '/api/auth/google', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accessToken: tokenBody.access_token }),
+    body: JSON.stringify({ accessToken: data.session.access_token }),
   })
   const result = await response.json().catch(() => null) as VerifiedSchoolLogin | null
   if (!response.ok || !result?.success || !result.token || !result.user) {
     throw new Error(result?.message ?? 'This Google account could not be linked to an active Murama School account.')
   }
 
-  // Optional profile sync. School roles and permissions stay in MySQL.
-  try {
-    const profileResponse = await fetch(config.url + '/rest/v1/profiles?on_conflict=id', {
-      method: 'POST',
-      headers: {
-        apikey: config.publishableKey,
-        Authorization: 'Bearer ' + tokenBody.access_token,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify([{
-        id: result.profile.id,
-        email: result.profile.email,
-        display_name: result.profile.displayName,
-        avatar_url: result.profile.avatarUrl,
-      }]),
-    })
-    if (!profileResponse.ok) {
-      console.warn('Murama profile sync skipped. Apply the Supabase profiles migration and check Data API access.')
-    }
-  } catch {
-    console.warn('Murama profile sync skipped because Supabase was unreachable.')
+  // This profile stores identity display metadata only; school roles and
+  // access permissions come from the server's school database.
+  const { error: profileError } = await supabase.from('profiles').upsert({
+    id: profile.id,
+    email: profile.email,
+    display_name: profile.displayName,
+    avatar_url: profile.avatarUrl,
+  }, { onConflict: 'id' })
+  if (profileError) {
+    // Authorization was verified independently by the school API. A profile
+    // sync problem must not turn a valid school sign-in into a fake success.
+    console.warn('Murama profile sync skipped:', profileError.message)
   }
 
-  return result
+  return { ...result, profile }
 }
 
 export function cleanGoogleCallbackUrl(): void {
