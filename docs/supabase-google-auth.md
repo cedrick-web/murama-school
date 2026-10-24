@@ -4,7 +4,7 @@ This is an additive identity integration. Express, MySQL school records and role
 
 ## Flow and access policy
 
-The /admin Google button starts Supabase OAuth with authorization code + PKCE. The callback validates a random state, exchanges the one-time code, and sends the short-lived access token to Express. Express validates it remotely through Supabase Auth, requires Google as the identity provider and a verified email, looks for an existing active MySQL user, and then issues the existing Murama JWT using the role already assigned in MySQL.
+The /admin Google button starts Supabase OAuth with authorization code + PKCE. Supabase Auth handles the OAuth state check and the client uses a PKCE code verifier to exchange the one-time authorization code, then sends the short-lived access token to Express. Express validates it remotely through Supabase Auth, requires Google as the identity provider and a verified email, looks for an existing active MySQL user, and then issues the existing Murama JWT using the role already assigned in MySQL.
 
 Google never creates school accounts and never grants a role. New or inactive users must be provisioned/reactivated by an administrator. Existing role-protected APIs remain authoritative. public.profiles stores optional supplementary profile fields under owner-only RLS; it is not used to authorize school actions.
 
