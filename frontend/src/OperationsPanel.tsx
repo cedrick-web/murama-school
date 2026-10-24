@@ -131,7 +131,7 @@ function AttendanceModule({ token }: { token: string }) {
   }, [options, classId, termId])
   const load = useCallback(async () => {
     if (!classId || !termId || !date) { setRecords([]); return }
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setRecords([])
     try {
       const result = await api<{ records: AttendanceRow[] }>('/api/admin/operations/attendance?classId=' + classId + '&termId=' + termId + '&date=' + date, token)
       setRecords(result.records.map((row) => ({ ...row, attendanceStatus: row.attendanceStatus ?? null, note: row.note ?? '' })))
@@ -189,7 +189,7 @@ function GradebookModule({ token }: { token: string }) {
     if (!classId && options.classes[0]) setClassId(String(options.classes[0].id))
   }, [options, termId, classId])
   const loadAssessments = useCallback(async () => {
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setAssessments([])
     try {
       const params = new URLSearchParams()
       if (termId) params.set('termId', termId)
@@ -202,7 +202,7 @@ function GradebookModule({ token }: { token: string }) {
   useEffect(() => { if (options) void loadAssessments() }, [options, loadAssessments])
   const loadMarks = useCallback(async () => {
     if (!selectedId) { setMarks([]); return }
-    setMarksLoading(true); setError('')
+    setMarksLoading(true); setError(''); setMarks([])
     try {
       const result = await api<{ records: MarkRow[] }>('/api/admin/operations/assessments/' + selectedId + '/results', token)
       setMarks(result.records.map((row) => ({ ...row, score: row.score ?? '', remarks: row.remarks ?? '' })))
@@ -228,7 +228,7 @@ function GradebookModule({ token }: { token: string }) {
   }
   async function loadReports() {
     if (!termId || !classId) { setError('Choose a term and class first.'); return }
-    setMarksLoading(true); setError('')
+    setMarksLoading(true); setError(''); setReports([])
     try { const result = await api<{ reportCards: ReportCard[] }>('/api/admin/operations/report-cards?termId=' + termId + '&classId=' + classId, token); setReports(result.reportCards) }
     catch (reason) { setError(messageOf(reason)) } finally { setMarksLoading(false) }
   }
@@ -295,7 +295,7 @@ function TimetableModule({ token }: { token: string }) {
     if (!yearFilter && year) setYearFilter(String(year.id))
   }, [options, yearFilter])
   const load = useCallback(async () => {
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setEntries([])
     try {
       const params = new URLSearchParams()
       if (yearFilter) params.set('academicYearId', yearFilter)
@@ -390,7 +390,7 @@ function FinanceModule({ token }: { token: string }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const load = useCallback(async () => {
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setStructures([]); setItems([]); setPayments([]); setStudents([]); setSummary({}); setPaymentSummary({})
     const results = await Promise.allSettled([
       api<{ summary: Record<string, number | string | null>; payments: Record<string, number | string | null> }>('/api/admin/operations/fees/overview', token),
       api<{ structures: FeeStructure[] }>('/api/admin/operations/fees/structures', token),
@@ -528,7 +528,7 @@ function MessagesModule({ token }: { token: string }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const load = useCallback(async () => {
-    setLoading(true); setError('')
+    setLoading(true); setError(''); setMessages([])
     try {
       const result = await api<{ messages: MessageRecord[] }>('/api/admin/operations/messages', token)
       setMessages(result.messages)
@@ -537,6 +537,7 @@ function MessagesModule({ token }: { token: string }) {
   useEffect(() => { void load() }, [load])
   const loadRecipients = useCallback(async () => {
     if (!selectedId) { setRecipients([]); return }
+    setRecipients([])
     try {
       const result = await api<{ recipients: Recipient[] }>('/api/admin/operations/messages/' + selectedId + '/recipients', token)
       setRecipients(result.recipients)
