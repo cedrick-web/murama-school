@@ -55,7 +55,7 @@ type CatalogSection = 'years' | 'classes' | 'subjects'
 const catalogSections: CatalogSection[] = ['years', 'classes', 'subjects']
 
 function catalogSectionFromPath(pathname: string): CatalogSection {
-  const segment = pathname.replace(/\\/+$/, '').split('/')[3]
+  const segment = pathname.replace(/\/+$/, '').split('/')[3]
   return catalogSections.includes(segment as CatalogSection) ? segment as CatalogSection : 'years'
 }
 type YearForm = { name: string; startsOn: string; endsOn: string; isCurrent: boolean }
@@ -139,7 +139,7 @@ export default function AcademicPanel({ token }: { token: string }) {
       }
     }
     window.addEventListener('popstate', handleRouteChange)
-    const path = window.location.pathname.replace(/\\/+$/, '')
+    const path = window.location.pathname.replace(/\/+$/, '')
     if (path === '/admin/academics') {
       window.history.replaceState({}, '', '/admin/academics/years' + window.location.search)
     }
