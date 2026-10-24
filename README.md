@@ -64,6 +64,18 @@ The public site runs at `http://localhost:5173/`, the admin workspace at
 
 
 
+
+
+## Public school website
+
+The public homepage is built around the live public API contracts:
+- School name, address, email and phone from `GET /api/public/school`
+- Published all-audience announcements from `GET /api/public/announcements`
+- English/Kinyarwanda switching, accessible navigation, responsive layouts, retry states, and direct email/phone links when the school has published those details
+- A direct link to the protected administration portal
+
+The previous future-feature tiles and copy about unimplemented school modules have been removed. The site does not fabricate school statistics, gallery entries, attendance, grades or events. Any additional public modules need real backend endpoints and school data before they should be shown as operational.
+
 ## Modern administration workspace
 
 The administrator interface uses a responsive navigation shell and a live operations dashboard. The overview fetches student records, enrollment, user accounts, academic years/classes, announcements, audit activity, and MySQL health from existing API endpoints. If an endpoint is unavailable, that metric is shown as unavailable instead of substituting sample data.
