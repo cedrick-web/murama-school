@@ -62,6 +62,22 @@ The public site runs at `http://localhost:5173/`, the admin workspace at
 
 
 
+
+
+## Modern administration workspace
+
+The administrator interface uses a responsive navigation shell and a live operations dashboard. The overview fetches student records, enrollment, user accounts, academic years/classes, announcements, audit activity, and MySQL health from existing API endpoints. If an endpoint is unavailable, that metric is shown as unavailable instead of substituting sample data.
+
+The existing functional modules remain API-backed:
+- Student register and enrollment
+- Academic years, terms, classes, streams and subjects
+- Account roles and access status
+- School settings
+- Announcements
+- Audit activity
+
+The user account table supports live text search and role/status filtering. The responsive sidebar adapts to smaller screens. No attendance, grading, fee collection, parent portal or report-card UI is presented as operational because those workflows do not yet have complete backend APIs in this repository.
+
 ## Supabase Google sign-in
 
 A separate feature branch adds Google sign-in through Supabase Auth while retaining MySQL as the source of truth for school accounts, roles, and access permissions. The existing email/password login remains available.

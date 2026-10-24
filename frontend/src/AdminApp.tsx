@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import AcademicPanel from './AcademicPanel'
 import StudentsPanel from './StudentsPanel'
+import DashboardPanel from './DashboardPanel'
 import './admin.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
@@ -69,7 +70,7 @@ interface AuditLog {
   actor: string | null
 }
 
-type AdminSection = 'users' | 'academics' | 'students' | 'settings' | 'announcements' | 'activity'
+type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'settings' | 'announcements' | 'activity'
 
 const roles: UserRole[] = [
   'ADMIN',
@@ -122,6 +123,45 @@ function formatDate(value: string | null): string {
     : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date)
 }
 
+
+function WorkspaceIcon({ name }: { name: AdminSection }) {
+  let paths: React.ReactNode
+  switch (name) {
+    case 'dashboard':
+      paths = <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></>
+      break
+    case 'users':
+      paths = <><circle cx="9" cy="8" r="3"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><path d="M16 5.3a3 3 0 0 1 0 5.8M18 14.2a4.5 4.5 0 0 1 3 4.3V20"/></>
+      break
+    case 'students':
+      paths = <><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M6 11v5c3.5 3 8.5 3 12 0v-5M21 9v6"/></>
+      break
+    case 'academics':
+      paths = <><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></>
+      break
+    case 'announcements':
+      paths = <><path d="M4 14a2 2 0 0 1-2-2v-1a2 2 0 0 1 2-2h3l11-5v18L7 15H4Z"/><path d="m7 15 2 6h4"/></>
+      break
+    case 'settings':
+      paths = <><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1a1.8 1.8 0 0 1-2.5 2.5l-.1-.1a1.8 1.8 0 0 0-3 .9v.2a1.8 1.8 0 0 1-3.6 0v-.2a1.8 1.8 0 0 0-3-.9l-.1.1a1.8 1.8 0 0 1-2.5-2.5l.1-.1a1.8 1.8 0 0 0-.9-3H4a1.8 1.8 0 0 1 0-3.6h.2a1.8 1.8 0 0 0 .9-3l-.1-.1a1.8 1.8 0 0 1 2.5-2.5l.1.1a1.8 1.8 0 0 0 3-.9V2a1.8 1.8 0 0 1 3.6 0v.2a1.8 1.8 0 0 0 3 .9l.1-.1a1.8 1.8 0 0 1 2.5 2.5l-.1.1a1.8 1.8 0 0 0 .9 3h.2a1.8 1.8 0 0 1 0 3.6h-.2a1.8 1.8 0 0 0-.9 2.8Z"/></>
+      break
+    case 'activity':
+      paths = <><path d="M3 12h4l2.2-7 4.5 14 2.2-7H21"/></>
+      break
+  }
+  return <svg className="workspace-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>
+}
+
+const sectionDetails: Record<AdminSection, { title: string; description: string }> = {
+  dashboard: { title: 'Overview', description: 'Live operational snapshot of the school system.' },
+  users: { title: 'Users & access', description: 'Manage school accounts, roles and account status.' },
+  students: { title: 'Students & enrollment', description: 'Maintain student records and class enrollment.' },
+  academics: { title: 'Academic structure', description: 'Configure academic years, terms, classes, streams and subjects.' },
+  announcements: { title: 'Announcements', description: 'Publish and manage communication for the school community.' },
+  settings: { title: 'School settings', description: 'Manage school identity, contact details and regional preferences.' },
+  activity: { title: 'Audit activity', description: 'Review recorded changes made through the school system.' },
+}
+
 export default function AdminApp() {
   const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
   const [user, setUser] = useState<AuthUser | null>(null)
@@ -130,8 +170,12 @@ export default function AdminApp() {
   )
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL')
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
   const [busyUserId, setBusyUserId] = useState<number | null>(null)
-  const [section, setSection] = useState<AdminSection>('users')
+  const [section, setSection] = useState<AdminSection>('dashboard')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -312,6 +356,15 @@ export default function AdminApp() {
     }
   }
 
+  const visibleUsers = users.filter((account) => {
+    const query = userSearch.trim().toLowerCase()
+    const searchable = [account.firstName, account.lastName, account.email ?? '', account.phone ?? ''].join(' ').toLowerCase()
+    const active = account.isActive === true || account.isActive === 1
+    return (!query || searchable.includes(query))
+      && (userRoleFilter === 'ALL' || account.role === userRoleFilter)
+      && (userStatusFilter === 'ALL' || (userStatusFilter === 'ACTIVE' ? active : !active))
+  })
+
   if (status === 'checking' || oauthProcessing) {
     return <main className="admin-loading" aria-live="polite">{oauthProcessing ? 'Completing Google sign-in…' : 'Checking your session…'}</main>
   }
@@ -363,135 +416,124 @@ export default function AdminApp() {
     )
   }
 
+  const activeSection = sectionDetails[section]
+  const displayName = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') : 'Administrator'
+  const initials = displayName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+
   return (
-    <main className="admin-page">
-      <header className="admin-topbar">
-        <a className="admin-brand" href="/" aria-label="Murama School home">
-          <span className="admin-brand-mark" aria-hidden="true">M</span>
-          <span><strong>ESM</strong><small>Administration</small></span>
+    <main className={'admin-workspace' + (mobileNavOpen ? ' sidebar-is-open' : '')}>
+      <button className="workspace-sidebar-scrim" type="button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />
+      <aside className="workspace-sidebar" aria-label="Main navigation">
+        <a className="workspace-brand" href="/" aria-label="Murama School public homepage">
+          <span className="workspace-brand-symbol">M</span>
+          <span className="workspace-brand-copy"><strong>Murama School</strong><small>Digital school system</small></span>
         </a>
-        <div className="admin-account">
-          <span>{user ? `${user.firstName} ${user.lastName}` : 'Administrator'}</span>
-          <button className="admin-quiet-button" type="button" onClick={signOut}>Sign out</button>
+
+        <div className="workspace-sidebar-context">
+          <span>WORKSPACE</span>
+          <strong>School administration</strong>
         </div>
-      </header>
 
-      <section className="admin-content">
-          <nav className="admin-section-nav" aria-label="Administration sections">
-            {([
-              ['users', 'Users'],
-              ['academics', 'Academics'],
-              ['students', 'Students'],
-              ['settings', 'School settings'],
-              ['announcements', 'Announcements'],
-              ['activity', 'Activity log'],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                className={section === value ? 'is-selected' : ''}
-                aria-current={section === value ? 'page' : undefined}
-                onClick={() => {
-                  setSection(value)
-                  setError('')
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+        <nav className="workspace-navigation">
+          <span className="workspace-nav-label">OVERVIEW</span>
+          <button type="button" className={'workspace-nav-item' + (section === 'dashboard' ? ' is-active' : '')} aria-current={section === 'dashboard' ? 'page' : undefined} onClick={() => { setSection('dashboard'); setError(''); setMobileNavOpen(false) }}>
+            <WorkspaceIcon name="dashboard" /><span>Dashboard</span><span className="workspace-nav-shortcut">↵</span>
+          </button>
 
-          {error && <p className="admin-alert" role="alert">{error}</p>}
+          <span className="workspace-nav-label">SCHOOL MANAGEMENT</span>
+          {([
+            ['students', 'Students & enrollment'],
+            ['academics', 'Academic structure'],
+            ['users', 'Users & access'],
+          ] as const).map(([value, label]) => (
+            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { setSection(value); setError(''); setMobileNavOpen(false) }}>
+              <WorkspaceIcon name={value} /><span>{label}</span>
+            </button>
+          ))}
 
+          <span className="workspace-nav-label">SCHOOL OPERATIONS</span>
+          {([
+            ['announcements', 'Announcements'],
+            ['activity', 'Audit activity'],
+            ['settings', 'School settings'],
+          ] as const).map(([value, label]) => (
+            <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { setSection(value); setError(''); setMobileNavOpen(false) }}>
+              <WorkspaceIcon name={value} /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="workspace-sidebar-bottom">
+          <a className="workspace-public-link" href="/" target="_blank" rel="noreferrer">
+            <span className="workspace-public-icon">↗</span><span><strong>Public website</strong><small>Open school homepage</small></span>
+          </a>
+          <div className="workspace-sidebar-divider" />
+          <div className="workspace-profile">
+            <span className="workspace-avatar">{initials || 'AD'}</span>
+            <span className="workspace-profile-copy"><strong>{displayName}</strong><small>School administrator</small></span>
+            <button className="workspace-logout" type="button" aria-label="Sign out" title="Sign out" onClick={signOut}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/></svg>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <div className="workspace-main">
+        <header className="workspace-topbar">
+          <div className="workspace-topbar-left">
+            <button type="button" className="workspace-menu-toggle" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <div className="workspace-breadcrumb"><span>Murama School</span><span aria-hidden="true">/</span><strong>Administration</strong></div>
+          </div>
+          <div className="workspace-topbar-right">
+            <span className="workspace-access-badge"><span />ADMIN WORKSPACE</span>
+            <span className="workspace-topbar-date">{new Intl.DateTimeFormat('en-RW', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date())}</span>
+          </div>
+        </header>
+
+        <section className="workspace-content" aria-labelledby="workspace-page-title">
+          <div className="workspace-page-intro">
+            <div><p className="workspace-page-overline">ESM / SCHOOL ADMINISTRATION</p><h1 id="workspace-page-title">{activeSection.title}</h1><p>{activeSection.description}</p></div>
+            <span className="workspace-role-chip"><span className="workspace-role-dot" />Administrator access</span>
+          </div>
+
+          {error && <p className="admin-alert workspace-global-alert" role="alert">{error}</p>}
+
+          {section === 'dashboard' && token && (
+            <DashboardPanel token={token} userName={displayName} onNavigate={(nextSection) => { setSection(nextSection); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }) }} />
+          )}
           {section === 'users' && (
             <>
               <div className="admin-page-heading">
-                <div>
-                  <p className="admin-eyebrow">SCHOOL ADMINISTRATION</p>
-                  <h1>User management</h1>
-                  <p className="admin-muted">Review school accounts and manage access.</p>
-                </div>
-                <div className="admin-user-count" aria-label={`${users.length} accounts`}>
-                  <strong>{users.length}</strong><span>accounts</span>
-                </div>
+                <div><p className="admin-eyebrow">SCHOOL ADMINISTRATION</p><h2>User management</h2><p className="admin-muted">Review school accounts and manage access.</p></div>
+                <div className="admin-user-count" aria-label={users.length + ' accounts'}><strong>{users.length}</strong><span>accounts</span></div>
               </div>
               <section className="admin-table-card" aria-labelledby="users-heading">
-                <div className="admin-table-heading">
-                  <div>
-                    <h2 id="users-heading">School accounts</h2>
-                    <p>Changes to roles or account access are recorded.</p>
-                  </div>
-                  {loadingUsers && <span className="admin-muted" aria-live="polite">Loading…</span>}
+                <div className="admin-table-heading"><div><h2 id="users-heading">School accounts</h2><p>Role and account access changes are recorded in the audit trail.</p></div>{loadingUsers && <span className="admin-muted" aria-live="polite">Loading…</span>}</div>
+                <div className="admin-table-toolbar">
+                  <label className="admin-table-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input type="search" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search name, email or phone" aria-label="Search school accounts" /></label>
+                  <label className="admin-table-filter"><span>Role</span><select value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value as 'ALL' | UserRole)} aria-label="Filter users by role"><option value="ALL">All roles</option>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+                  <label className="admin-table-filter"><span>Status</span><select value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')} aria-label="Filter users by status"><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+                  <span className="admin-filter-count">{visibleUsers.length} of {users.length}</span>
                 </div>
-                <div className="admin-table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th scope="col">Name</th>
-                        <th scope="col">Email / phone</th>
-                        <th scope="col">Role</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Last sign-in</th>
-                        <th scope="col">Account access</th>
+                <div className="admin-table-scroll"><table>
+                  <thead><tr><th scope="col">Name</th><th scope="col">Email / phone</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Last sign-in</th><th scope="col">Account access</th></tr></thead>
+                  <tbody>
+                    {visibleUsers.map((account) => {
+                      const active = account.isActive === true || account.isActive === 1
+                      return <tr key={account.id}>
+                        <td data-label="Name"><strong>{account.firstName} {account.lastName}</strong></td>
+                        <td data-label="Email / phone"><span>{account.email ?? '—'}</span>{account.phone && <small className="admin-cell-secondary">{account.phone}</small>}</td>
+                        <td data-label="Role"><select aria-label={'Role for ' + account.firstName + ' ' + account.lastName} value={account.role} disabled={busyUserId === account.id || account.id === user?.id} onChange={(event) => { const role = roles.find((candidate) => candidate === event.target.value); if (role) void changeRole(account, role) }}>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select>{account.id === user?.id && <small className="admin-cell-secondary">Your own role is locked</small>}</td>
+                        <td data-label="Status"><span className={'admin-status ' + (active ? 'is-active' : 'is-inactive')}>{active ? 'Active' : 'Inactive'}</span></td>
+                        <td data-label="Last sign-in">{formatDate(account.lastLoginAt)}</td>
+                        <td data-label="Account access">{active || account.role === 'ADMIN' ? <button className="admin-quiet-button" type="button" disabled={busyUserId === account.id || account.id === user?.id} onClick={() => void changeAccountStatus(account, !active)}>{active ? 'Deactivate' : 'Activate'}</button> : <span className="admin-cell-secondary">Invitation required</span>}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((account) => {
-                        const active = account.isActive === true || account.isActive === 1
-                        return (
-                          <tr key={account.id}>
-                            <td data-label="Name">
-                              <strong>{account.firstName} {account.lastName}</strong>
-                            </td>
-                            <td data-label="Email / phone">
-                              <span>{account.email ?? '—'}</span>
-                              {account.phone && <small className="admin-cell-secondary">{account.phone}</small>}
-                            </td>
-                            <td data-label="Role">
-                              <select
-                                aria-label={`Role for ${account.firstName} ${account.lastName}`}
-                                value={account.role}
-                                disabled={busyUserId === account.id || account.id === user?.id}
-                                onChange={(event) => {
-                                  const role = roles.find((candidate) => candidate === event.target.value)
-                                  if (role) void changeRole(account, role)
-                                }}
-                              >
-                                {roles.map((role) => <option key={role} value={role}>{role}</option>)}
-                              </select>
-                              {account.id === user?.id && (
-                                <small className="admin-cell-secondary">Your own role is locked</small>
-                              )}
-                            </td>
-                            <td data-label="Status">
-                              <span className={`admin-status ${active ? 'is-active' : 'is-inactive'}`}>
-                                {active ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td data-label="Last sign-in">{formatDate(account.lastLoginAt)}</td>
-                            <td data-label="Account access">
-                              {active || account.role === 'ADMIN' ? (
-                                <button
-                                  className="admin-quiet-button"
-                                  type="button"
-                                  disabled={busyUserId === account.id || account.id === user?.id}
-                                  onClick={() => void changeAccountStatus(account, !active)}
-                                >
-                                  {active ? 'Deactivate' : 'Activate'}
-                                </button>
-                              ) : (
-                                <span className="admin-cell-secondary">Invitation required</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                      {!loadingUsers && users.length === 0 && (
-                        <tr><td className="admin-empty" colSpan={6}>No user accounts found.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    })}
+                    {!loadingUsers && visibleUsers.length === 0 && <tr><td className="admin-empty" colSpan={6}>{users.length === 0 ? 'No user accounts found.' : 'No accounts match these filters.'}</td></tr>}
+                  </tbody>
+                </table></div>
               </section>
             </>
           )}
@@ -501,7 +543,9 @@ export default function AdminApp() {
           {section === 'students' && token && <StudentsPanel token={token} />}
           {section === 'announcements' && token && <AnnouncementsPanel token={token} />}
           {section === 'activity' && token && <ActivityPanel token={token} />}
-      </section>
+          <footer className="workspace-footer"><span>Murama School Management System</span><span>Access is protected by school account permissions.</span></footer>
+        </section>
+      </div>
     </main>
   )
 }
