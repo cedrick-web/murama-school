@@ -125,6 +125,43 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
   ]
   const today = new Intl.DateTimeFormat('en-RW', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date())
   const firstName = userName.trim().split(/\s+/)[0] || 'Administrator'
+  const setupTasks = [
+    {
+      key: 'academic-year',
+      title: 'Set the current academic year',
+      detail: years === null ? 'Academic-year data is unavailable' : currentYear ? currentYear.name + ' is marked as current' : years.length ? 'No academic year is marked current' : 'Create the first academic year',
+      done: Boolean(currentYear),
+      unavailable: years === null,
+      destination: 'academics' as const,
+    },
+    {
+      key: 'classes',
+      title: 'Configure classes and streams',
+      detail: classes === null ? 'Class catalogue is unavailable' : classes.length ? classes.length + ' classes · ' + (streamCount ?? 0) + ' streams recorded' : 'No classes have been created yet',
+      done: Boolean(classes?.length),
+      unavailable: classes === null,
+      destination: 'academics' as const,
+    },
+    {
+      key: 'students',
+      title: 'Add student records',
+      detail: students === null ? 'Student register is unavailable' : students.length ? students.length + ' student records in the register' : 'The student register is empty',
+      done: Boolean(students?.length),
+      unavailable: students === null,
+      destination: 'students' as const,
+    },
+    {
+      key: 'announcements',
+      title: 'Publish a school announcement',
+      detail: announcements === null ? 'Announcement data is unavailable' : publishedCount ? publishedCount + ' published announcement' + (publishedCount === 1 ? '' : 's') : 'No public announcement is currently published',
+      done: Boolean(publishedCount),
+      unavailable: announcements === null,
+      destination: 'announcements' as const,
+    },
+  ]
+  const knownSetupTasks = setupTasks.filter((task) => !task.unavailable)
+  const completedSetupTasks = knownSetupTasks.filter((task) => task.done).length
+  const setupProgress = knownSetupTasks.length ? Math.round(completedSetupTasks / knownSetupTasks.length * 100) : null
 
   return (
     <motion.div
@@ -227,6 +264,69 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
           <button className="dashboard-create-announcement" type="button" onClick={() => onNavigate('announcements')}>
             Manage school communications <span aria-hidden="true">→</span>
           </button>
+        </div>
+      </section>
+
+      <section className="dashboard-readiness-grid" aria-label="School readiness and class overview">
+        <div className="dashboard-panel dashboard-readiness-panel">
+          <div className="dashboard-panel-heading dashboard-readiness-heading">
+            <div><span className="dashboard-panel-eyebrow">SETUP CHECKLIST</span><h3>Readiness & next steps</h3></div>
+            <span className="dashboard-readiness-total">{setupProgress === null ? '—' : setupProgress + '%'}</span>
+          </div>
+          <div className="dashboard-readiness-progress" aria-label={setupProgress === null ? 'Setup progress unavailable' : setupProgress + ' percent of setup checks complete'}>
+            <span style={{ width: (setupProgress ?? 0) + '%' }} />
+          </div>
+          <p className="dashboard-readiness-caption">
+            {setupProgress === null
+              ? 'Checklist progress is unavailable until the school API responds.'
+              : completedSetupTasks + ' of ' + knownSetupTasks.length + ' checks complete. Use these shortcuts to finish configuring the school workspace.'}
+          </p>
+          <div className="dashboard-checklist">
+            {setupTasks.map((task) => (
+              <button type="button" className="dashboard-check-item" key={task.key} onClick={() => onNavigate(task.destination)}>
+                <span className={'dashboard-check-icon ' + (task.unavailable ? 'is-unavailable' : task.done ? 'is-done' : 'is-pending')} aria-hidden="true">
+                  {task.unavailable ? '–' : task.done ? '✓' : '+'}
+                </span>
+                <span className="dashboard-check-copy"><strong>{task.title}</strong><small>{task.detail}</small></span>
+                <span className={'dashboard-check-status ' + (task.unavailable ? 'is-unavailable' : task.done ? 'is-done' : 'is-pending')}>
+                  {task.unavailable ? 'Unavailable' : task.done ? 'Ready' : 'Set up'}
+                </span>
+                <span className="dashboard-check-arrow" aria-hidden="true">↗</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="dashboard-panel dashboard-class-panel">
+          <div className="dashboard-panel-heading">
+            <div><span className="dashboard-panel-eyebrow">ACADEMIC STRUCTURE</span><h3>Class overview</h3></div>
+            <button type="button" onClick={() => onNavigate('academics')}>Manage classes <span aria-hidden="true">→</span></button>
+          </div>
+          <div className="dashboard-class-summary">
+            <div><strong>{classes === null ? '—' : classes.length.toLocaleString('en-RW')}</strong><span>Configured classes</span></div>
+            <div><strong>{streamCount === null ? '—' : streamCount.toLocaleString('en-RW')}</strong><span>Recorded streams</span></div>
+          </div>
+          {classes === null ? (
+            <p className="dashboard-empty">The class catalogue could not be loaded. Check the connection or refresh the dashboard.</p>
+          ) : classes.length === 0 ? (
+            <div className="dashboard-class-empty">
+              <span aria-hidden="true">＋</span>
+              <strong>No classes configured yet</strong>
+              <p>Create classes and streams to prepare the academic structure.</p>
+              <button type="button" onClick={() => onNavigate('academics')}>Set up academic structure <span aria-hidden="true">→</span></button>
+            </div>
+          ) : (
+            <div className="dashboard-class-list">
+              {classes.slice(0, 5).map((schoolClass) => (
+                <button className="dashboard-class-row" key={schoolClass.id} type="button" onClick={() => onNavigate('academics')}>
+                  <span className="dashboard-class-avatar" aria-hidden="true">{schoolClass.name.trim().slice(0, 2).toUpperCase()}</span>
+                  <span className="dashboard-class-copy"><strong>{schoolClass.name}</strong><small>{schoolClass.streamCount === 1 ? '1 stream' : (schoolClass.streamCount || 0) + ' streams'}</small></span>
+                  <span className="dashboard-class-row-arrow" aria-hidden="true">↗</span>
+                </button>
+              ))}
+              {classes.length > 5 && <p className="dashboard-class-overflow">Showing 5 of {classes.length} configured classes.</p>}
+            </div>
+          )}
         </div>
       </section>
 

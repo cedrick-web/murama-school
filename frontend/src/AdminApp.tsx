@@ -4,6 +4,7 @@ import StudentsPanel from './StudentsPanel'
 import DashboardPanel from './DashboardPanel'
 import OperationsPanel from './OperationsPanel'
 import './admin.css'
+import './admin-modern.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =

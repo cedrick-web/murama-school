@@ -1,0 +1,61 @@
+/* Modern responsive workspace refinement */
+.admin-workspace {
+  --ui-ink:#142f22; --ui-copy:#536b5c; --ui-muted:#7b8b80; --ui-line:#e0e9e1;
+  background:radial-gradient(ellipse at 92% 0%,rgba(221,232,211,.32),transparent 32%),#f5f7f4;
+  color:var(--ui-ink);
+}
+.workspace-sidebar {
+  background:linear-gradient(165deg,#123c29 0%,#0d3020 65%,#0b291b 100%);
+  border-right:1px solid rgba(238,246,238,.12);box-shadow:10px 0 32px rgba(11,41,27,.07);
+}
+.workspace-brand-symbol {border-radius:14px;background:linear-gradient(145deg,#255b3d,#153c29);box-shadow:0 8px 22px rgba(0,0,0,.15),inset 0 1px rgba(255,255,255,.1)}
+.workspace-sidebar-context {margin-top:22px;border-color:rgba(228,241,230,.14);background:rgba(255,255,255,.055);backdrop-filter:blur(12px)}
+.workspace-nav-label {margin-top:20px}
+.workspace-nav-item {min-height:46px;border-radius:11px;font-size:.79rem;letter-spacing:-.01em}
+.workspace-nav-item.is-active {background:linear-gradient(100deg,#f4f7ef,#e8f0e4);color:#16462d;border-color:rgba(231,212,157,.55);box-shadow:inset 3px 0 #d6b96c,0 7px 18px rgba(0,0,0,.08)}
+.workspace-nav-item.is-active .workspace-nav-icon {color:#34784a}
+.workspace-nav-item:hover:not(.is-active) {transform:translateX(2px)}
+.workspace-public-link {background:rgba(255,255,255,.035)}
+.workspace-topbar {min-height:72px;border-bottom-color:#e1e9e1;box-shadow:0 3px 14px rgba(22,53,34,.025);background:rgba(255,255,255,.92);backdrop-filter:blur(16px)}
+.workspace-breadcrumb {font-size:.78rem}.workspace-breadcrumb strong {color:#173d28}
+.workspace-content {padding-top:clamp(25px,3.2vw,44px);padding-bottom:36px}
+.workspace-page-intro {margin-bottom:30px}
+.workspace-page-intro h1 {font-size:clamp(1.8rem,2.7vw,2.55rem);letter-spacing:-.065em}
+.workspace-page-intro>div>p:last-child {max-width:680px;font-size:.9rem}
+.workspace-role-chip {border-color:#d9e6d8;background:rgba(255,255,255,.85);box-shadow:0 3px 10px rgba(30,76,43,.035)}
+.admin-workspace .admin-table-card,.admin-workspace .admin-form-card {border:1px solid #e0e9e1;border-radius:17px;background:rgba(255,255,255,.97);box-shadow:0 8px 28px rgba(19,57,33,.045),0 1px 2px rgba(19,57,33,.025)}
+.admin-workspace .admin-table-heading {padding:23px 25px;background:linear-gradient(110deg,#fff,#fbfdf9)}
+.admin-workspace .admin-table-heading h2 {font-size:1.04rem;letter-spacing:-.025em}
+.admin-workspace .admin-table-heading p {line-height:1.6}
+.admin-workspace .admin-table-card th {padding-block:14px;background:#f6f9f5;border-bottom-color:#e6eee6}
+.admin-workspace .admin-table-card td {padding-block:16px}
+.admin-workspace .admin-table-card tbody tr {transition:background-color 140ms ease}
+.admin-workspace .admin-table-card tbody tr:hover {background:#fbfdf9}
+.admin-workspace .admin-form-card {padding:27px}
+.admin-workspace .admin-form-card input:not([type=checkbox]),.admin-workspace .admin-form-card textarea,.admin-workspace .admin-form-card select,.admin-login-card input {border-color:#d5e1d6;border-radius:11px;background:#fcfdfb;transition:border-color 150ms ease,box-shadow 150ms ease,background 150ms ease}
+.admin-workspace .admin-form-card input:focus,.admin-workspace .admin-form-card textarea:focus,.admin-workspace .admin-form-card select:focus,.admin-workspace .admin-login-card input:focus {outline:0;border-color:#579268;background:#fff;box-shadow:0 0 0 4px rgba(56,128,77,.11)}
+.admin-workspace .admin-primary-button {min-height:45px;border-radius:11px;background:linear-gradient(135deg,#276d45,#174d31);box-shadow:0 6px 15px rgba(27,94,56,.12)}
+.admin-workspace .admin-primary-button:hover {box-shadow:0 9px 20px rgba(27,94,56,.18)}
+.admin-workspace .admin-quiet-button {min-height:37px;border-radius:10px}
+.admin-workspace .admin-status {padding:6px 9px;border-radius:999px;background:#edf7ef;font-size:.72rem;font-weight:750}
+.admin-workspace .admin-status.is-inactive {background:#fbf0eb}
+.admin-workspace .admin-alert {border-radius:12px;box-shadow:0 3px 12px rgba(110,49,35,.04)}
+.admin-login-page {position:relative;isolation:isolate;overflow:hidden;background:radial-gradient(ellipse at 15% 15%,rgba(216,232,207,.9),transparent 34%),radial-gradient(ellipse at 85% 80%,rgba(223,199,132,.2),transparent 28%),linear-gradient(135deg,#f8faf6,#eef4ed)}
+.admin-login-page:before,.admin-login-page:after {position:absolute;z-index:-1;width:340px;height:340px;border:1px solid rgba(35,101,65,.08);border-radius:50%;content:"";pointer-events:none}
+.admin-login-page:before {top:-210px;right:-110px}
+.admin-login-page:after {bottom:-220px;left:-130px;width:430px;height:430px}
+.admin-login-card {position:relative;border-radius:24px;padding:clamp(25px,4vw,42px);box-shadow:0 30px 90px rgba(18,53,36,.11),0 2px 8px rgba(18,53,36,.025)}
+.admin-brand-mark {width:50px;height:50px;border-radius:16px;background:linear-gradient(145deg,#1b5937,#0e3020);box-shadow:0 8px 20px rgba(18,61,39,.16)}
+.admin-google-button,.admin-primary-button {border-radius:11px}
+.admin-login-note,.workspace-footer {line-height:1.6}
+:where(.admin-workspace,.admin-login-page) button:focus-visible,:where(.admin-workspace,.admin-login-page) a:focus-visible,:where(.admin-workspace,.admin-login-page) input:focus-visible,:where(.admin-workspace,.admin-login-page) select:focus-visible,:where(.admin-workspace,.admin-login-page) textarea:focus-visible {outline:3px solid rgba(215,187,112,.75);outline-offset:3px}
+@media(max-width:900px){.workspace-topbar{min-height:66px}.workspace-content{padding-top:26px}.workspace-sidebar{border-right:0}}
+@media(max-width:620px){
+.workspace-topbar{padding-inline:12px}.workspace-breadcrumb{font-size:.65rem}.workspace-content{padding:21px 12px 20px}
+.workspace-page-intro h1{font-size:1.8rem}.admin-workspace .admin-table-card,.admin-workspace .admin-form-card{border-radius:14px}
+.admin-workspace .admin-table-heading{padding:18px 16px}.admin-workspace .admin-form-card{padding:18px 15px}
+.admin-activity-item{grid-template-columns:10px minmax(0,1fr);gap:10px}.admin-activity-item time{grid-column:2}
+.admin-announcement-header{align-items:flex-start;flex-direction:column}.admin-row-actions{flex-direction:row;align-items:center;flex-wrap:wrap}
+}
+@media(max-width:380px){.workspace-breadcrumb span:first-child{display:none}.workspace-topbar-date{font-size:.62rem}.workspace-menu-toggle{width:35px;height:35px}.admin-login-card{padding:23px 18px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}

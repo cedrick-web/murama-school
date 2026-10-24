@@ -254,3 +254,54 @@ html { scroll-padding-top: 88px; }
 @media (prefers-reduced-motion: reduce) {
   .public-nav a, .language-toggle, .public-button, .school-info-card, .public-announcement-card { transition: none; }
 }
+
+/* Public site finishing pass: clearer focus, editorial spacing and refined responsive surfaces. */
+.public-site { color:#183b28; }
+.public-header { min-height:80px; box-shadow:0 4px 22px rgba(18,55,34,.025); }
+.public-brand { transition:opacity 140ms ease; }
+.public-brand:hover { opacity:.86; }
+.school-mark { box-shadow:0 7px 18px rgba(15,56,31,.13),inset 0 1px rgba(255,255,255,.12); }
+.public-nav-admin { border-radius:10px; box-shadow:0 3px 10px rgba(20,61,41,.035); transition:background 140ms ease,border-color 140ms ease,transform 140ms ease; }
+.public-nav-admin:hover { transform:translateY(-1px); border-color:#bfd4c1; }
+.language-toggle { border-radius:10px; transition:background 140ms ease,border-color 140ms ease; }
+.public-hero { isolation:isolate; }
+.public-hero-copy { animation:public-enter-up 540ms cubic-bezier(.2,.7,.2,1) both; }
+.public-live-panel { animation:public-enter-up 650ms cubic-bezier(.2,.7,.2,1) 70ms both; }
+.public-live-panel { box-shadow:0 26px 70px rgba(18,55,35,.17),inset 0 1px rgba(255,255,255,.055); }
+.public-live-panel-head { background:rgba(255,255,255,.025); }
+.public-button { min-height:48px; border-radius:10px; }
+.public-button.primary { box-shadow:0 9px 20px rgba(20,61,41,.15); }
+.public-button.primary:hover { box-shadow:0 12px 25px rgba(20,61,41,.21); }
+.public-proof-strip { position:relative; z-index:2; box-shadow:0 8px 24px rgba(19,61,34,.025); }
+.public-school-section,.public-updates-section { scroll-margin-top:85px; }
+.school-info-card,.public-announcement-card { position:relative; transition:transform 180ms ease,border-color 180ms ease,box-shadow 180ms ease; }
+.school-info-card:hover,.public-announcement-card:hover { transform:translateY(-3px); border-color:#cadcc9; box-shadow:0 13px 28px rgba(24,62,37,.055); }
+.school-info-primary { border-color:#dce8d7; }
+.public-section-heading h2,.contact-section-copy h2 { text-wrap:balance; }
+.public-announcement-card h3 { text-wrap:pretty; }
+.public-refresh-button,.public-updates-state button { border-radius:10px; transition:background 140ms ease,border-color 140ms ease; }
+.public-contact-section { position:relative; overflow:hidden; }
+.public-contact-section::after { position:absolute; top:-180px; right:-100px; width:430px; height:430px; border:1px solid rgba(19,61,34,.11); border-radius:50%; content:""; pointer-events:none; }
+.contact-section-copy,.contact-section-actions { position:relative; z-index:1; }
+.public-footer { border-top:1px solid rgba(226,198,126,.14); }
+@keyframes public-enter-up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+@media(max-width:780px) {
+  .public-header { min-height:70px; }
+  .public-hero { padding-top:54px; }
+  .public-proof-strip { box-shadow:none; }
+  .public-school-section,.public-updates-section { scroll-margin-top:70px; }
+}
+@media(max-width:560px) {
+  .public-header { box-shadow:0 3px 14px rgba(18,55,34,.03); }
+  .public-hero { padding-top:45px; }
+  .public-live-panel { border-radius:16px; }
+  .public-section-heading h2,.contact-section-copy h2 { letter-spacing:-.055em; }
+  .public-school-section,.public-updates-section { padding-top:67px; padding-bottom:67px; }
+  .public-contact-section { padding-top:58px; padding-bottom:58px; }
+  .public-footer { align-items:flex-start; flex-direction:column; gap:17px; }
+  .footer-copyright { text-align:left; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .public-hero-copy,.public-live-panel { animation:none; }
+  .school-info-card,.public-announcement-card,.public-nav-admin { transition:none; }
+}
