@@ -113,7 +113,7 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
   ]
   return <div className="operations-workspace">
-    <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the existing MySQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
+    <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
     <div className="operations-layout">
       <nav className="operations-tabs" aria-label="Operational modules">
         {tabs.map((item) => <button key={item.id} type="button" className={'operations-tab' + (tab === item.id ? ' is-active' : '')} aria-current={tab === item.id ? 'page' : undefined} onClick={() => selectTab(item.id)}><span className="operations-tab-number">{item.number}</span><span><strong>{item.title}</strong><small>{item.sub}</small></span><span className="operations-tab-arrow">→</span></button>)}
