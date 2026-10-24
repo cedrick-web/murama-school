@@ -3,7 +3,7 @@ import { Router } from 'express'
 import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
 
-import { pool } from '../config/database.js'
+import { isDatabaseUnavailable, pool } from '../config/database.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
 
 const router = Router()
@@ -92,6 +92,10 @@ async function audit(
 function fail(res: Response, action: string, error: unknown): void {
   if (error instanceof OperationError) {
     res.status(error.statusCode).json({ success: false, message: error.message })
+    return
+  }
+  if (isDatabaseUnavailable(error)) {
+    res.status(503).json({ success: false, message: 'The school database is not configured or is temporarily unavailable.' })
     return
   }
   const code = (error as { code?: string } | null)?.code
