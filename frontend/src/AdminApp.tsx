@@ -156,10 +156,8 @@ export default function AdminApp() {
       return
     }
 
-    let active = true
     finishGoogleSignIn(code)
       .then((result) => {
-        if (!active) return
         if (result.user.role !== 'ADMIN') {
           throw new Error('This Google account is not an administrator. Contact the school administrator for access.')
         }
@@ -170,15 +168,11 @@ export default function AdminApp() {
         setStatus('checking')
       })
       .catch((reason: unknown) => {
-        if (!active) return
         setError(reason instanceof Error ? reason.message : 'Unable to finish Google sign-in')
         setStatus('signed-out')
         setOauthProcessing(false)
       })
 
-    return () => {
-      active = false
-    }
   }, [])
 
   useEffect(() => {
