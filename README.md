@@ -60,6 +60,14 @@ The public site runs at `http://localhost:5173/`, the admin workspace at
 `http://localhost:5173/admin`, and the backend health check at
 `http://localhost:5000/api/health/database`.
 
+
+
+## Supabase Google sign-in
+
+A separate feature branch adds Google sign-in through Supabase Auth while retaining MySQL as the source of truth for school accounts, roles, and access permissions. The existing email/password login remains available.
+
+Read **[Supabase Google sign-in setup](docs/supabase-google-auth.md)** before enabling it. Google sign-in requires a Supabase project, Google OAuth provider configuration, redirect allow-list entries, and local environment variables. It does not automatically provision school accounts or grant administrator access.
+
 ## Planned stages
 
 1. Foundation

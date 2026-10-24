@@ -4,7 +4,7 @@ This is an additive identity integration. Express, MySQL school records and role
 
 ## Flow and access policy
 
-The /admin Google button starts Supabase OAuth with authorization code + PKCE. The callback validates a random state, exchanges the one-time code, and sends the short-lived access token to Express. Express validates it remotely through Supabase Auth, requires Google as the identity provider and a verified email, looks for an existing active MySQL user, and then issues the existing Murama JWT using the role already assigned in MySQL.
+The /admin Google button starts Supabase OAuth with authorization code + PKCE. Supabase Auth handles the OAuth state check and the client uses a PKCE code verifier to exchange the one-time authorization code, then sends the short-lived access token to Express. Express validates it remotely through Supabase Auth, requires Google as the identity provider and a verified email, looks for an existing active MySQL user, and then issues the existing Murama JWT using the role already assigned in MySQL.
 
 Google never creates school accounts and never grants a role. New or inactive users must be provisioned/reactivated by an administrator. Existing role-protected APIs remain authoritative. public.profiles stores optional supplementary profile fields under owner-only RLS; it is not used to authorize school actions.
 
@@ -49,4 +49,4 @@ In two PowerShell terminals:
 
 Open http://localhost:5173/admin. Verify that an active admin with a verified Google email can sign in; missing and inactive users are denied; non-admins cannot access admin APIs; existing email/password login still works; and the profile RLS rules prevent access to another user's row.
 
-For production, use HTTPS and update the frontend API URL, Express CORS origin, Supabase redirect allow list, and hosting environment variables. Add rate limiting to POST /api/auth/google before public launch. Profile sync is best-effort and will not block valid login if the profile migration is not applied. Existing school records are not migrated to Supabase by this change.
+For production, use HTTPS and update the frontend API URL, Express CORS origin, Supabase redirect allow list, and hosting environment variables. The current rate limiter is process-local, limited to this endpoint, and capped to bound memory; use a shared limiter store if you run multiple API instances and configure proxy trust carefully for your host. Profile sync is best-effort and will not block valid login if the profile migration is not applied. Existing school records are not migrated to Supabase by this change.
