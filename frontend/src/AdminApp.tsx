@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import AcademicPanel from './AcademicPanel'
 import StudentsPanel from './StudentsPanel'
 import DashboardPanel from './DashboardPanel'
+import OperationsPanel from './OperationsPanel'
 import './admin.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
@@ -70,7 +71,7 @@ interface AuditLog {
   actor: string | null
 }
 
-type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'settings' | 'announcements' | 'activity'
+type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'operations' | 'settings' | 'announcements' | 'activity'
 
 const roles: UserRole[] = [
   'ADMIN',
@@ -148,6 +149,9 @@ function WorkspaceIcon({ name }: { name: AdminSection }) {
     case 'activity':
       paths = <><path d="M3 12h4l2.2-7 4.5 14 2.2-7H21"/></>
       break
+    case 'operations':
+      paths = <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h4M7 16h7"/><circle cx="17" cy="15" r="2"/></>
+      break
   }
   return <svg className="workspace-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths}</svg>
 }
@@ -157,6 +161,7 @@ const sectionDetails: Record<AdminSection, { title: string; description: string 
   users: { title: 'Users & access', description: 'Manage school accounts, roles and account status.' },
   students: { title: 'Students & enrollment', description: 'Maintain student records and class enrollment.' },
   academics: { title: 'Academic structure', description: 'Configure academic years, terms, classes, streams and subjects.' },
+  operations: { title: 'School operations', description: 'Manage attendance registers, assessments, timetable, fees and school communication.' },
   announcements: { title: 'Announcements', description: 'Publish and manage communication for the school community.' },
   settings: { title: 'School settings', description: 'Manage school identity, contact details and regional preferences.' },
   activity: { title: 'Audit activity', description: 'Review recorded changes made through the school system.' },
@@ -453,6 +458,7 @@ export default function AdminApp() {
 
           <span className="workspace-nav-label">SCHOOL OPERATIONS</span>
           {([
+            ['operations', 'Attendance, grades & finance'],
             ['announcements', 'Announcements'],
             ['activity', 'Audit activity'],
             ['settings', 'School settings'],
@@ -541,6 +547,7 @@ export default function AdminApp() {
           {section === 'settings' && token && <SettingsPanel token={token} />}
           {section === 'academics' && token && <AcademicPanel token={token} />}
           {section === 'students' && token && <StudentsPanel token={token} />}
+          {section === 'operations' && token && <OperationsPanel token={token} />}
           {section === 'announcements' && token && <AnnouncementsPanel token={token} />}
           {section === 'activity' && token && <ActivityPanel token={token} />}
           <footer className="workspace-footer"><span>Murama School Management System</span><span>Access is protected by school account permissions.</span></footer>
