@@ -157,7 +157,7 @@ export default function AdminApp() {
     }
 
     let active = true
-    finishGoogleSignIn(code, params.get('state'))
+    finishGoogleSignIn(code)
       .then((result) => {
         if (!active) return
         if (result.user.role !== 'ADMIN') {
