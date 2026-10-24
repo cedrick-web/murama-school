@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
-import type { PoolConnection } from 'mysql2/promise'
+import type { PoolConnection } from '../config/database.js'
 import bcrypt from 'bcryptjs'
 
 import { pool } from '../config/database.js'
