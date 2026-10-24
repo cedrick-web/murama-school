@@ -66,6 +66,21 @@ The public site runs at `http://localhost:5173/`, the admin workspace at
 
 
 
+
+
+## School operations API and modules
+
+The administrator workspace now includes live operational screens backed by Express/MySQL:
+- **Attendance:** daily class register by class, term and date. Only selected statuses are saved; missing attendance remains unmarked.
+- **Gradebook:** assessment creation, score entry, validation against each assessment's maximum score, and report-card generation from recorded assessment results and attendance.
+- **Timetable:** class, stream, subject, teacher, room, day and period management with overlap-conflict checks.
+- **Fees:** fee structures, assigning balances to active students, outstanding-balance views and receipt-backed payments allocated against assigned fee items.
+- **Messaging:** send messages to active users or a role audience. Message, recipients, notifications and audit entry are recorded transactionally.
+
+These endpoints are mounted under `/api/admin/operations` and remain behind the existing administrator authentication/role middleware. The primary SQL schema now includes the operational tables already defined in the XAMPP schema. Fresh databases should apply `database/schema.sql`; XAMPP-based local setups may continue importing `database/xampp/murama_school_xampp.sql`.
+
+No live data is seeded automatically. Empty tables produce empty states; the school must enter real academic terms, students, assessments, fee structures and other records before operational totals or workflows can be used. Build checks do not replace end-to-end tests against a configured MySQL database.
+
 ## Public school website
 
 The public homepage is built around the live public API contracts:
