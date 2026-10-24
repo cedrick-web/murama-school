@@ -32,7 +32,7 @@ interface AuditRecord {
   id: number; action: string; entityType: string | null; entityId: number | null
   details: Record<string, unknown> | string | null; createdAt: string; actor: string | null
 }
-type NavigateTo = 'users' | 'academics' | 'students' | 'settings' | 'announcements' | 'activity'
+type NavigateTo = 'users' | 'academics' | 'students' | 'operations' | 'settings' | 'announcements' | 'activity'
 interface DashboardPanelProps { token: string; userName: string; onNavigate: (section: NavigateTo) => void }
 const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
 
@@ -239,6 +239,9 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
           </button>
           <button type="button" className="dashboard-module-card" onClick={() => onNavigate('settings')}>
             <span className="dashboard-module-icon">04</span><span><strong>School identity</strong><small>Manage contact details, locale, language and currency.</small></span><span className="dashboard-module-arrow">↗</span>
+          </button>
+          <button type="button" className="dashboard-module-card" onClick={() => onNavigate('operations')}>
+            <span className="dashboard-module-icon">05</span><span><strong>School operations</strong><small>Attendance registers, assessments and marks, timetable, fee balances, receipts and official messages.</small></span><span className="dashboard-module-arrow">↗</span>
           </button>
         </div>
       </section>
