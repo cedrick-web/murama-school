@@ -402,12 +402,12 @@ router.get('/timetable/options', async (_req, res) => {
     ])
     res.json({
       success: true,
-      classes: (classes[0] as [unknown])[0],
-      streams: (streams[0] as [unknown])[0],
-      subjects: (subjects[0] as [unknown])[0],
-      years: (years[0] as [unknown])[0],
-      terms: (terms[0] as [unknown])[0],
-      teachers: (teachers[0] as [unknown])[0],
+      classes: classes[0],
+      streams: streams[0],
+      subjects: subjects[0],
+      years: years[0],
+      terms: terms[0],
+      teachers: teachers[0],
     })
   } catch (error) {
     fail(res, 'load timetable options', error)
