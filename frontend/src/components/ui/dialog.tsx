@@ -20,6 +20,7 @@ export function Dialog({
   className,
 }: DialogProps) {
   const dialogRef = React.useRef<HTMLDialogElement>(null)
+  const dialogId = React.useId()
 
   React.useEffect(() => {
     const dialog = dialogRef.current
@@ -32,8 +33,8 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
-      aria-labelledby="school-dialog-title"
-      aria-describedby={description ? 'school-dialog-description' : undefined}
+      aria-labelledby={dialogId + '-title'}
+      aria-describedby={description ? dialogId + '-description' : undefined}
       onCancel={(event) => {
         event.preventDefault()
         onOpenChange(false)
@@ -48,8 +49,8 @@ export function Dialog({
     >
       <div className="flex items-start justify-between gap-4 border-b p-5 sm:p-6">
         <div className="grid gap-1.5">
-          <h2 id="school-dialog-title" className="text-lg font-bold tracking-tight">{title}</h2>
-          {description && <p id="school-dialog-description" className="text-sm text-muted-foreground">{description}</p>}
+          <h2 id={dialogId + '-title'} className="text-lg font-bold tracking-tight">{title}</h2>
+          {description && <p id={dialogId + '-description'} className="text-sm text-muted-foreground">{description}</p>}
         </div>
         <button
           type="button"
