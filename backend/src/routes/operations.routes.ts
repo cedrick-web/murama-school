@@ -95,11 +95,11 @@ function fail(res: Response, action: string, error: unknown): void {
     return
   }
   const code = (error as { code?: string } | null)?.code
-  if (code === 'ER_DUP_ENTRY') {
+  if (code === 'ER_DUP_ENTRY' || code === '23505') {
     res.status(409).json({ success: false, message: 'A record with those details already exists' })
     return
   }
-  if (code === 'ER_ROW_IS_REFERENCED_2' || code === 'ER_ROW_IS_REFERENCED') {
+  if (code === 'ER_ROW_IS_REFERENCED_2' || code === 'ER_ROW_IS_REFERENCED' || code === '23503') {
     res.status(409).json({ success: false, message: 'This record is still used by other school records' })
     return
   }
