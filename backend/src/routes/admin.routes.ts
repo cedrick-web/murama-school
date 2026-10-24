@@ -5,6 +5,7 @@ import type { PoolConnection } from 'mysql2/promise'
 import { pool } from '../config/database.js'
 import academicRoutes from './academic.routes.js'
 import peopleRoutes from './people.routes.js'
+import operationsRoutes from './operations.routes.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
 
@@ -32,6 +33,7 @@ type SettingKey = keyof typeof settingDefaults
 router.use(requireAuth, requireRole('ADMIN'))
 router.use('/academics', academicRoutes)
 router.use('/people', peopleRoutes)
+router.use('/operations', operationsRoutes)
 
 async function withTransaction<T>(
   action: (connection: PoolConnection) => Promise<T>,
