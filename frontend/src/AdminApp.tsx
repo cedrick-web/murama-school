@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import AcademicPanel from './AcademicPanel'
 import StudentsPanel from './StudentsPanel'
 import './admin.css'
+import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =
   | 'ADMIN'
@@ -79,6 +80,11 @@ const roles: UserRole[] = [
   'PARENT',
 ]
 const tokenKey = 'murama-admin-token'
+
+function hasGoogleCallback(): boolean {
+  const params = new URLSearchParams(window.location.search)
+  return params.has('code') || params.has('error') || params.has('error_description')
+}
 const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')
 
 async function request<T extends ApiResponse>(
@@ -120,7 +126,7 @@ export default function AdminApp() {
   const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
   const [user, setUser] = useState<AuthUser | null>(null)
   const [status, setStatus] = useState<'checking' | 'signed-out' | 'ready'>(
-    token ? 'checking' : 'signed-out',
+    token || hasGoogleCallback() ? 'checking' : 'signed-out',
   )
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
@@ -129,10 +135,55 @@ export default function AdminApp() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [oauthBusy, setOauthBusy] = useState(false)
+  const [oauthProcessing, setOauthProcessing] = useState(() => hasGoogleCallback())
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const callbackError = getGoogleCallbackError()
+    if (!code && !callbackError) return
+
+    cleanGoogleCallbackUrl()
+    setOauthProcessing(true)
+    setStatus('checking')
+    setError('')
+
+    if (!code) {
+      setError(callbackError ?? 'Google sign-in was cancelled.')
+      setStatus('signed-out')
+      setOauthProcessing(false)
+      return
+    }
+
+    let active = true
+    finishGoogleSignIn(code, params.get('state'))
+      .then((result) => {
+        if (!active) return
+        if (result.user.role !== 'ADMIN') {
+          throw new Error('This Google account is not an administrator. Contact the school administrator for access.')
+        }
+        sessionStorage.setItem(tokenKey, result.token)
+        setPassword('')
+        setToken(result.token)
+        setOauthProcessing(false)
+        setStatus('checking')
+      })
+      .catch((reason: unknown) => {
+        if (!active) return
+        setError(reason instanceof Error ? reason.message : 'Unable to finish Google sign-in')
+        setStatus('signed-out')
+        setOauthProcessing(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     if (!token) {
-      setStatus('signed-out')
+      if (!oauthProcessing) setStatus('signed-out')
       setUser(null)
       return
     }
@@ -163,7 +214,7 @@ export default function AdminApp() {
     return () => {
       active = false
     }
-  }, [token])
+  }, [token, oauthProcessing])
 
   useEffect(() => {
     if (status !== 'ready' || !token) return
@@ -216,6 +267,17 @@ export default function AdminApp() {
     }
   }
 
+  async function handleGoogleLogin() {
+    setError('')
+    setOauthBusy(true)
+    try {
+      await startGoogleSignIn()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to start Google sign-in')
+      setOauthBusy(false)
+    }
+  }
+
   async function changeRole(target: AdminUser, role: UserRole) {
     if (!token || role === target.role) return
 
@@ -256,8 +318,8 @@ export default function AdminApp() {
     }
   }
 
-  if (status === 'checking') {
-    return <main className="admin-loading" aria-live="polite">Checking your session…</main>
+  if (status === 'checking' || oauthProcessing) {
+    return <main className="admin-loading" aria-live="polite">{oauthProcessing ? 'Completing Google sign-in…' : 'Checking your session…'}</main>
   }
 
   if (status === 'signed-out') {
@@ -270,6 +332,16 @@ export default function AdminApp() {
           <h1>Sign in to your workspace</h1>
           <p className="admin-muted">Use your school administrator account to continue.</p>
           {error && <p className="admin-alert" role="alert">{error}</p>}
+          <button
+            className="admin-google-button"
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={oauthBusy || oauthProcessing}
+          >
+            <span className="admin-google-mark" aria-hidden="true">G</span>
+            {oauthBusy ? 'Connecting to Google…' : 'Continue with Google'}
+          </button>
+          <div className="admin-login-divider"><span>or use your school account</span></div>
           <form onSubmit={handleLogin}>
             <label htmlFor="admin-email">Email address</label>
             <input
