@@ -36,7 +36,7 @@ interface AuditRecord {
 }
 type NavigateTo = 'users' | 'academics' | 'students' | 'operations' | 'settings' | 'announcements' | 'activity'
 interface DashboardPanelProps { token: string; userName: string; onNavigate: (section: NavigateTo) => void }
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
+const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 
 async function getApi<T>(path: string, token: string): Promise<T> {
   const response = await fetch(apiUrl + path, { headers: { Authorization: 'Bearer ' + token } })
