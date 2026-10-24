@@ -51,6 +51,13 @@ interface AcademicResponse {
 }
 
 type CatalogSection = 'years' | 'classes' | 'subjects'
+
+const catalogSections: CatalogSection[] = ['years', 'classes', 'subjects']
+
+function catalogSectionFromPath(pathname: string): CatalogSection {
+  const segment = pathname.replace(/\\/+$/, '').split('/')[3]
+  return catalogSections.includes(segment as CatalogSection) ? segment as CatalogSection : 'years'
+}
 type YearForm = { name: string; startsOn: string; endsOn: string; isCurrent: boolean }
 type TermForm = {
   academicYearId: string
@@ -104,7 +111,7 @@ function isCurrent(value: boolean | number): boolean {
 }
 
 export default function AcademicPanel({ token }: { token: string }) {
-  const [section, setSection] = useState<CatalogSection>('years')
+  const [section, setSection] = useState<CatalogSection>(() => catalogSectionFromPath(window.location.pathname))
   const [years, setYears] = useState<AcademicYear[]>([])
   const [terms, setTerms] = useState<AcademicTerm[]>([])
   const [classes, setClasses] = useState<SchoolClass[]>([])
@@ -124,6 +131,20 @@ export default function AcademicPanel({ token }: { token: string }) {
   const [classForm, setClassForm] = useState<ClassForm>(emptyClass)
   const [streamForm, setStreamForm] = useState<StreamForm>(emptyStream)
   const [subjectForm, setSubjectForm] = useState<SubjectForm>(emptySubject)
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (window.location.pathname.startsWith('/admin/academics')) {
+        setSection(catalogSectionFromPath(window.location.pathname))
+      }
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    const path = window.location.pathname.replace(/\\/+$/, '')
+    if (path === '/admin/academics') {
+      window.history.replaceState({}, '', '/admin/academics/years' + window.location.search)
+    }
+    return () => window.removeEventListener('popstate', handleRouteChange)
+  }, [])
 
   async function loadCatalogs() {
     const [yearResult, termResult, classResult, streamResult, subjectResult] = await Promise.all([
@@ -242,6 +263,8 @@ export default function AcademicPanel({ token }: { token: string }) {
             className={section === value ? 'is-selected' : ''}
             aria-current={section === value ? 'page' : undefined}
             onClick={() => {
+              const nextPath = '/admin/academics/' + value
+              if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath)
               setSection(value)
               void refresh()
             }}
