@@ -1,0 +1,25 @@
+-- Murama School query-performance indexes and Supabase security hardening.
+CREATE INDEX IF NOT EXISTS idx_ann_creator ON public.announcements (created_by);
+CREATE INDEX IF NOT EXISTS idx_ass_class ON public.assessments (class_id);
+CREATE INDEX IF NOT EXISTS idx_ass_creator ON public.assessments (created_by);
+CREATE INDEX IF NOT EXISTS idx_ass_subject ON public.assessments (subject_id);
+CREATE INDEX IF NOT EXISTS idx_att_term ON public.attendance_records (term_id);
+CREATE INDEX IF NOT EXISTS idx_att_user ON public.attendance_records (recorded_by);
+CREATE INDEX IF NOT EXISTS idx_class_subject_subject ON public.class_subjects (subject_id);
+CREATE INDEX IF NOT EXISTS idx_events_creator ON public.events (created_by);
+CREATE INDEX IF NOT EXISTS idx_fee_structures_class ON public.fee_structures (class_id);
+CREATE INDEX IF NOT EXISTS idx_gallery_uploader ON public.gallery_items (uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_grades_subject ON public.grades (subject_id);
+CREATE INDEX IF NOT EXISTS idx_news_author ON public.news (author_user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_receiver ON public.payments (received_by);
+CREATE INDEX IF NOT EXISTS idx_enrollments_class ON public.student_enrollments (class_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_stream ON public.student_enrollments (stream_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_term ON public.student_enrollments (term_id);
+CREATE INDEX IF NOT EXISTS idx_student_parents_parent ON public.student_parents (parent_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_subject_class ON public.teacher_subjects (class_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_subject_subject ON public.teacher_subjects (subject_id);
+CREATE INDEX IF NOT EXISTS idx_timetable_stream ON public.timetable_entries (stream_id);
+CREATE INDEX IF NOT EXISTS idx_timetable_subject ON public.timetable_entries (subject_id);
+CREATE INDEX IF NOT EXISTS idx_timetable_term ON public.timetable_entries (term_id);
+-- This event-trigger function enforces RLS on newly-created public tables; it is not a browser RPC.
+REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
