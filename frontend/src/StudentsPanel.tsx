@@ -74,7 +74,7 @@ interface PeopleResponse {
 type View = 'roster' | 'enrollments'
 
 function studentViewFromPath(pathname: string): View {
-  return pathname.replace(/\\/+$/, '').endsWith('/enrollments') ? 'enrollments' : 'roster'
+  return pathname.replace(/\/+$/, '').endsWith('/enrollments') ? 'enrollments' : 'roster'
 }
 type StudentForm = {
   firstName: string
@@ -175,7 +175,7 @@ export default function StudentsPanel({ token }: { token: string }) {
       }
     }
     window.addEventListener('popstate', handleRouteChange)
-    const path = window.location.pathname.replace(/\\/+$/, '')
+    const path = window.location.pathname.replace(/\/+$/, '')
     if (path === '/admin/students') {
       window.history.replaceState({}, '', '/admin/students/roster' + window.location.search)
     }
