@@ -881,3 +881,64 @@
     content: none;
   }
 }
+
+
+/* Supabase Google OAuth uses the same visual language as the existing login form. */
+.admin-google-button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  margin: 18px 0 0;
+  padding: 0 16px;
+  border: 1px solid #d4ddd5;
+  border-radius: 9px;
+  background: #fff;
+  color: #183721;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.admin-google-button:hover {
+  border-color: #9fb5a4;
+  background: #f8faf8;
+}
+
+.admin-google-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.admin-google-mark {
+  display: inline-grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid #e0e5e0;
+  border-radius: 50%;
+  color: #4285f4;
+  font-family: Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.admin-login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: #849087;
+  font-size: 0.76rem;
+}
+
+.admin-login-divider::before,
+.admin-login-divider::after {
+  height: 1px;
+  flex: 1;
+  background: #e5eae5;
+  content: "";
+}
