@@ -167,6 +167,7 @@ export function translateMysqlQuery(query: string, values: readonly unknown[] = 
   text = text.replace(/\s*<=>\s*/g, ' IS NOT DISTINCT FROM ')
   text = text.replace(/\bIN\s*\(\s*\?\s*\)/gi, '= ANY(?)')
   text = text.replace(/\?\s+IS\s+NULL/gi, 'CAST(? AS TEXT) IS NULL')
+  text = text.replace(/\?\s*=\s*\?/g, 'CAST(? AS TEXT) = CAST(? AS TEXT)')
   text = rewriteIfFunctions(text)
   text = rewriteDuplicateKeyUpsert(text)
   text = quoteCaseSensitiveAliases(text)
