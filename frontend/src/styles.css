@@ -229,3 +229,28 @@ button:disabled { cursor: progress; opacity: .65; }
   :root { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Final responsive polish for the public landing page and shared interactions. */
+:root { color-scheme: light; }
+html { scroll-padding-top: 88px; }
+.public-header { box-shadow: 0 6px 28px rgba(16, 52, 31, .035); }
+.public-nav a, .language-toggle, .public-button, .school-info-card, .public-announcement-card {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.public-nav a:hover { color: #1f6840; }
+.public-button:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(16, 52, 31, .12); }
+.school-info-card:hover, .public-announcement-card:hover { transform: translateY(-2px); box-shadow: 0 16px 34px rgba(16, 52, 31, .07); }
+.public-section-heading { max-width: 720px; }
+.public-section-heading p { max-width: 620px; line-height: 1.8; }
+.public-hero { isolation: isolate; }
+.public-hero::before { content: ""; position: absolute; inset: 0 auto 0 0; width: min(6px, 1vw); background: linear-gradient(180deg, #e2c67e, #2d6846); opacity: .85; }
+.public-live-panel { box-shadow: 0 26px 65px rgba(8, 35, 20, .16); }
+.public-live-panel, .school-info-card, .public-announcement-card { border-radius: 18px; }
+@media (max-width: 780px) {
+  .public-hero::before { width: 3px; }
+  .public-live-panel { box-shadow: 0 16px 38px rgba(8, 35, 20, .12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-nav a, .language-toggle, .public-button, .school-info-card, .public-announcement-card { transition: none; }
+}

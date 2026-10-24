@@ -8,7 +8,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "test": "tsx --test src/config/sql-compat.test.ts",
+    "migrate:mysql-to-supabase": "tsx src/scripts/migrate-mysql-to-supabase.ts"
   },
   "dependencies": {
     "bcryptjs": "latest",
@@ -18,7 +20,8 @@
     "helmet": "latest",
     "jsonwebtoken": "latest",
     "morgan": "latest",
-    "mysql2": "latest"
+    "mysql2": "latest",
+    "postgres": "3.4.9"
   },
   "devDependencies": {
     "@types/bcryptjs": "latest",

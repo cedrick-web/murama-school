@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
-import type { PoolConnection } from 'mysql2/promise'
+import type { PoolConnection } from '../config/database.js'
 import bcrypt from 'bcryptjs'
 
 import { pool } from '../config/database.js'
@@ -179,11 +179,15 @@ function parseEnrollment(input: Record<string, unknown>): EnrollmentInput | null
 
 function reportFailure(res: Response, action: string, error: unknown): void {
   const code = (error as { code?: string } | null)?.code
-  if (code === 'ER_DUP_ENTRY') {
+  if (code === 'ER_DUP_ENTRY' || code === '23505') {
     res.status(409).json({
       success: false,
       message: 'A record with those details already exists',
     })
+    return
+  }
+  if (code === '23503') {
+    res.status(409).json({ success: false, message: 'The selected academic or student record is no longer available' })
     return
   }
   console.error(`Student ${action} failed`, error)

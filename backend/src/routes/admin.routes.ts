@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Response } from 'express'
-import type { PoolConnection } from 'mysql2/promise'
+import type { PoolConnection } from '../config/database.js'
 
 import { pool } from '../config/database.js'
 import academicRoutes from './academic.routes.js'
@@ -84,6 +84,15 @@ function fail(
   action: string,
   error: unknown,
 ): void {
+  const code = (error as { code?: string } | null)?.code
+  if (code === 'ER_DUP_ENTRY' || code === '23505') {
+    res.status(409).json({ success: false, message: 'A record with those details already exists' })
+    return
+  }
+  if (code === 'ER_ROW_IS_REFERENCED_2' || code === 'ER_ROW_IS_REFERENCED' || code === '23503') {
+    res.status(409).json({ success: false, message: 'This record is still used by other school records' })
+    return
+  }
   console.error(`Admin ${action} failed`, error)
   res.status(500).json({
     success: false,

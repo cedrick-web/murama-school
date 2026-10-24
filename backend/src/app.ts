@@ -45,14 +45,14 @@ app.get('/api/health/database', async (_req, res) => {
     res.json({
       success: true,
       service: 'murama-school-api',
-      database: 'mysql',
+      database: 'supabase-postgres',
       status: 'connected',
     })
   } catch {
     res.status(503).json({
       success: false,
       service: 'murama-school-api',
-      database: 'mysql',
+      database: 'supabase-postgres',
       status: 'unavailable',
     })
   }

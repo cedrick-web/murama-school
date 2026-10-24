@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
-import type { PoolConnection } from 'mysql2/promise'
+import type { PoolConnection } from '../config/database.js'
 
 import { pool } from '../config/database.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
@@ -95,11 +95,11 @@ function fail(res: Response, action: string, error: unknown): void {
     return
   }
   const code = (error as { code?: string } | null)?.code
-  if (code === 'ER_DUP_ENTRY') {
+  if (code === 'ER_DUP_ENTRY' || code === '23505') {
     res.status(409).json({ success: false, message: 'A record with those details already exists' })
     return
   }
-  if (code === 'ER_ROW_IS_REFERENCED_2' || code === 'ER_ROW_IS_REFERENCED') {
+  if (code === 'ER_ROW_IS_REFERENCED_2' || code === 'ER_ROW_IS_REFERENCED' || code === '23503') {
     res.status(409).json({ success: false, message: 'This record is still used by other school records' })
     return
   }
@@ -194,7 +194,7 @@ router.get('/assessments', async (req, res) => {
   }
   try {
     const [rows] = await pool.execute(
-      'SELECT a.id, a.term_id AS termId, t.name AS termName, t.academic_year_id AS academicYearId, y.name AS academicYearName, a.class_id AS classId, c.name AS className, a.subject_id AS subjectId, s.code AS subjectCode, s.name AS subjectName, a.title, a.assessment_type AS assessmentType, a.max_score AS maxScore, a.assessment_date AS assessmentDate, COUNT(ar.id) AS markedCount FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years y ON y.id = t.academic_year_id INNER JOIN classes c ON c.id = a.class_id INNER JOIN subjects s ON s.id = a.subject_id LEFT JOIN assessment_results ar ON ar.assessment_id = a.id WHERE (? IS NULL OR a.term_id = ?) AND (? IS NULL OR a.class_id = ?) GROUP BY a.id ORDER BY a.assessment_date DESC, a.id DESC',
+      'SELECT a.id, a.term_id AS termId, t.name AS termName, t.academic_year_id AS academicYearId, y.name AS academicYearName, a.class_id AS classId, c.name AS className, a.subject_id AS subjectId, s.code AS subjectCode, s.name AS subjectName, a.title, a.assessment_type AS assessmentType, a.max_score AS maxScore, a.assessment_date AS assessmentDate, (SELECT COUNT(*) FROM assessment_results ar WHERE ar.assessment_id = a.id) AS markedCount FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years y ON y.id = t.academic_year_id INNER JOIN classes c ON c.id = a.class_id INNER JOIN subjects s ON s.id = a.subject_id WHERE (? IS NULL OR a.term_id = ?) AND (? IS NULL OR a.class_id = ?) ORDER BY a.assessment_date DESC, a.id DESC',
       [termId, termId, classId, classId],
     )
     res.json({ success: true, assessments: rows })
@@ -353,7 +353,7 @@ router.post('/report-cards/generate', async (req: AuthenticatedRequest, res) => 
   }
   try {
     const [rows] = await pool.execute(
-      'SELECT s.id AS studentId, s.admission_number AS admissionNumber, u.first_name AS firstName, u.last_name AS lastName, (SELECT ROUND(AVG(ar.score / NULLIF(a.max_score, 0) * 100), 2) FROM assessment_results ar INNER JOIN assessments a ON a.id = ar.assessment_id WHERE ar.student_id = s.id AND a.term_id = ? AND a.class_id = ?) AS averageScore, (SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE ROUND(SUM(CASE WHEN att.status IN (?, ?) THEN 1 ELSE 0 END) * 100 / COUNT(*), 2) END FROM attendance_records att WHERE att.student_id = s.id AND att.term_id = ?) AS attendancePercentage FROM student_enrollments e INNER JOIN terms t ON t.id = ? AND t.academic_year_id = e.academic_year_id INNER JOIN students s ON s.id = e.student_id INNER JOIN users u ON u.id = s.user_id WHERE e.class_id = ? AND (e.term_id = t.id OR e.term_id IS NULL) AND e.enrollment_status = ? AND s.status = ? ORDER BY averageScore IS NULL, averageScore DESC, u.last_name, u.first_name',
+      'SELECT s.id AS studentId, s.admission_number AS admissionNumber, u.first_name AS firstName, u.last_name AS lastName, (SELECT ROUND(AVG(ar.score / NULLIF(a.max_score, 0) * 100), 2) FROM assessment_results ar INNER JOIN assessments a ON a.id = ar.assessment_id WHERE ar.student_id = s.id AND a.term_id = ? AND a.class_id = ?) AS averageScore, (SELECT CASE WHEN COUNT(*) = 0 THEN NULL ELSE ROUND(SUM(CASE WHEN att.status IN (?, ?) THEN 1 ELSE 0 END) * 100 / COUNT(*), 2) END FROM attendance_records att WHERE att.student_id = s.id AND att.term_id = ?) AS attendancePercentage FROM student_enrollments e INNER JOIN terms t ON t.id = ? AND t.academic_year_id = e.academic_year_id INNER JOIN students s ON s.id = e.student_id INNER JOIN users u ON u.id = s.user_id WHERE e.class_id = ? AND (e.term_id = t.id OR e.term_id IS NULL) AND e.enrollment_status = ? AND s.status = ? ORDER BY averageScore DESC NULLS LAST, u.last_name, u.first_name',
       [termId, classId, 'PRESENT', 'LATE', termId, termId, classId, 'ACTIVE', 'ACTIVE'],
     )
     const reportRows = rows as Array<Record<string, unknown>>
@@ -587,7 +587,7 @@ router.get('/fees/overview', async (_req, res) => {
 router.get('/fees/structures', async (_req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT fs.id, fs.academic_year_id AS academicYearId, y.name AS academicYearName, fs.class_id AS classId, c.name AS className, fs.name, fs.amount, fs.due_date AS dueDate, fs.description, COUNT(fi.id) AS assignedCount FROM fee_structures fs INNER JOIN academic_years y ON y.id = fs.academic_year_id LEFT JOIN classes c ON c.id = fs.class_id LEFT JOIN fee_items fi ON fi.fee_structure_id = fs.id GROUP BY fs.id ORDER BY y.starts_on DESC, c.name, fs.name',
+      'SELECT fs.id, fs.academic_year_id AS academicYearId, y.name AS academicYearName, fs.class_id AS classId, c.name AS className, fs.name, fs.amount, fs.due_date AS dueDate, fs.description, (SELECT COUNT(*) FROM fee_items fi WHERE fi.fee_structure_id = fs.id) AS assignedCount FROM fee_structures fs INNER JOIN academic_years y ON y.id = fs.academic_year_id LEFT JOIN classes c ON c.id = fs.class_id ORDER BY y.starts_on DESC, c.name, fs.name',
     )
     res.json({ success: true, structures: rows })
   } catch (error) {
@@ -815,7 +815,7 @@ router.post('/fees/payments', async (req: AuthenticatedRequest, res) => {
 router.get('/messages', async (_req, res) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT m.id, m.subject, m.body, m.sent_at AS sentAt, m.sender_user_id AS senderUserId, CONCAT_WS(" ", sender.first_name, sender.last_name) AS senderName, COUNT(mr.recipient_user_id) AS recipientCount, SUM(mr.read_at IS NOT NULL) AS readCount FROM messages m INNER JOIN users sender ON sender.id = m.sender_user_id LEFT JOIN message_recipients mr ON mr.message_id = m.id GROUP BY m.id ORDER BY m.sent_at DESC LIMIT 100',
+      'SELECT m.id, m.subject, m.body, m.sent_at AS sentAt, m.sender_user_id AS senderUserId, CONCAT_WS(" ", sender.first_name, sender.last_name) AS senderName, (SELECT COUNT(*) FROM message_recipients mr WHERE mr.message_id = m.id) AS recipientCount, (SELECT COUNT(*) FROM message_recipients mr WHERE mr.message_id = m.id AND mr.read_at IS NOT NULL) AS readCount FROM messages m INNER JOIN users sender ON sender.id = m.sender_user_id ORDER BY m.sent_at DESC LIMIT 100',
     )
     res.json({ success: true, messages: rows })
   } catch (error) {

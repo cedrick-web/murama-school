@@ -1,6 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AdminApp from './AdminApp'
+import './tailwind.css'
 import './styles.css'
 
 type Language = 'en' | 'rw'

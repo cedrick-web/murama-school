@@ -1,126 +1,77 @@
-# Ecole Secondaire de Murama Digital School Platform
+# Murama School Platform
 
-A bilingual (Kinyarwanda / English) school website and management platform for Ecole Secondaire de Murama.
+A bilingual school website and management system for Ecole Secondaire de Murama.
 
-## Project structure
+## Architecture
 
-- `frontend/` - React + TypeScript web application
-- `backend/` - Node.js + Express API
-- `database/` - MySQL schema and database documentation
-- `docs/` - architecture and project documentation
+- **Frontend:** React + TypeScript + Vite, public school information, admin dashboard, academic records, attendance, gradebook/report cards, timetable, finance and messaging screens.
+- **API:** Node.js + Express. Existing authenticated route contracts and school business rules remain in the API layer.
+- **Primary database:** Supabase-hosted PostgreSQL. All application API reads/writes and transaction workflows use the server-side PostgreSQL connection.
+- **Identity:** Existing school roles and active-account checks are still determined by the public.users and public.roles records. Supabase Auth verifies Google identity; a verified email is matched to an existing school account before the API issues the platform JWT.
+- **Legacy importer:** mysql2 remains only for the explicit, one-time MySQL/XAMPP data transfer command.
 
-## Development rule
+## Supabase project setup
 
-Build in small verified stages:
+1. Use the existing production Supabase project **muramaSDMS** (`ilmvmqxmasgasrtokjmz`, region `us-east-1`) and keep its database password private. Do not create a duplicate project.
+2. Copy **backend/.env.example** to **backend/.env**. Set **SUPABASE_DB_URL** to the Supabase **session pooler** URI from Dashboard → Connect, **SUPABASE_URL** to the project URL, **SUPABASE_PUBLISHABLE_KEY** to the publishable key, and a private **JWT_SECRET** of at least 32 characters. Do not use a service-role/secret key in frontend variables.
+3. The initial school schema and performance/security hardening migrations have already been applied to this Supabase project. Their tracked files are in `supabase/migrations/`. To reconcile or apply later checked-in migrations from the repository root:
 
-1. Build
-2. Run
-3. Test
-4. Fix
-5. Commit
-6. Push
-7. Continue
+   ~~~powershell
+   npx supabase login
+   npx supabase link --project-ref ilmvmqxmasgasrtokjmz
+   npx supabase db push
+   ~~~
 
-The frontend, backend, database, and media storage are designed to remain replaceable so the application can move between hosting providers without a rewrite.
+   Use a new/empty Supabase project for the initial baseline. The SQL migration creates all current school tables, indexes, identity-backed IDs, updated_at triggers, RLS protections, profile metadata policies and baseline roles/settings. It does not copy the contents of an existing XAMPP database.
+4. From **backend/**, run **npm install**, then **npm run create-admin** to create the first school administrator in the now-Supabase-backed application database.
+5. Copy **frontend/.env.example** to **frontend/.env.local** and set **VITE_API_URL**, **VITE_SUPABASE_URL**, and **VITE_SUPABASE_PUBLISHABLE_KEY**. These frontend values must never include the database connection string, a service-role key or the platform JWT secret.
+6. Start the API and frontend in separate terminals with **npm run dev**. The frontend runs on port 5173 and the API on port 5000 by default.
 
-## Current stage
+## Existing MySQL/XAMPP data transfer
 
-**Stage 6 - Academic setup, student roster, and public CMS integration**
+If the school already has records in MySQL, take a full backup of that database first. Apply the Supabase schema migration to the target project before importing records. Configure **MYSQL_URL**, or **MYSQL_HOST/MYSQL_PORT/MYSQL_DATABASE/MYSQL_USER/MYSQL_PASSWORD**, in **backend/.env** for the old source database. Then, from **backend/**, run:
 
-The project has a MySQL schema and connection health check, JWT login, role-protected admin APIs, and an admin workspace at `/admin` for user roles and account status, school settings, announcements, recent audit activity, academic setup (years, terms, classes, streams, and subjects), student records, and enrollment. New student portal access remains disabled until secure invitations are configured. The bilingual public homepage now displays published all-audience announcements and school contact settings from the CMS. Parent/teacher portals, attendance, grading, and production hosting remain future work.
+~~~powershell
+npm run migrate:mysql-to-supabase
+~~~
 
-## Local development
+The migration command copies real rows in foreign-key order, preserves primary keys, updates identity sequences, maps MySQL boolean fields to PostgreSQL booleans, and is safe to re-run for interrupted transfers when the source remains authoritative. It reports missing legacy tables explicitly. Run it during a write freeze, compare source/target row counts, verify attendance/grades/fee balances and payment receipts, and do not direct production traffic until the reconciliation is accepted. Supabase Auth users/password credentials and Auth profiles are not copied; identity configuration remains a separate step.
 
-1. Start MySQL in XAMPP. For a fresh local database, import
-   `database/xampp/murama_school_xampp.sql` using phpMyAdmin or the MySQL CLI.
-2. Copy `backend/.env.example` to `backend/.env` and set a private
-   `JWT_SECRET` (at least 32 characters) and the local database connection.
-   Keep this file local; never send its values in chat or commit them.
-3. Install and start the backend in one terminal:
+The original **database/xampp/murama_school_xampp.sql** and **database/schema.sql** are retained as legacy MySQL/XAMPP source definitions and data-migration references. They are no longer the application runtime database schema; the runtime baseline is in **supabase/migrations/**.
 
-   ```powershell
-   cd backend
-   npm ci
-   npm run dev
-   ```
+## Functional workflows
 
-4. Install and start the frontend in a second terminal:
+The admin APIs remain protected by authentication and the current ADMIN role check:
+- Academic years, terms, classes, streams, subjects, users, roles, student roster and enrollment.
+- Attendance registers with explicit unmarked states and transactional audit events.
+- Assessments, score entry, score validation, normalized report-card averages, rank ties and attendance measures.
+- Timetable CRUD and overlap checks for classes/streams and teachers.
+- Fee structures, assignment to actively enrolled students, balance reconciliation and transactional receipt-backed payments.
+- School messages, recipients, notification records and audit entries in a transaction.
+- Public school settings and published all-audience announcements.
+- Health checks at **/api/health** and **/api/health/database**.
 
-   ```powershell
-   cd frontend
-   npm ci
-   npm run dev
-   ```
+No synthetic student records, fake grades, pretend balances or sample counts are seeded. Fresh projects receive only the baseline role and site-setting records needed to initialize school administration.
 
-5. Create the first administrator in the backend terminal with
-   `npm run create-admin`. Enter the admin password directly into that local
-   terminal prompt; do not share it in chat.
+## Google sign-in and permissions
 
-The public site runs at `http://localhost:5173/`, the admin workspace at
-`http://localhost:5173/admin`, and the backend health check at
-`http://localhost:5000/api/health/database`.
+Follow [Supabase Google sign-in setup](docs/supabase-google-auth.md) to enable the provider and redirect URLs. Google sign-in is for existing, active school accounts only. A Supabase Auth identity does not automatically receive a school account or an administrator role; school permissions continue to come from the authoritative database role and active-account fields.
 
+## Checks and current verification boundary
 
+From **backend/**:
 
+~~~powershell
+npm install
+npm run typecheck
+npm test
+~~~
 
+From **frontend/**:
 
+~~~powershell
+npm install
+npm run build
+~~~
 
-
-
-
-## School operations API and modules
-
-The administrator workspace now includes live operational screens backed by Express/MySQL:
-- **Attendance:** daily class register by class, term and date. Only selected statuses are saved; missing attendance remains unmarked.
-- **Gradebook:** assessment creation, score entry, validation against each assessment's maximum score, and report-card generation from recorded assessment results and attendance.
-- **Timetable:** class, stream, subject, teacher, room, day and period management with overlap-conflict checks.
-- **Fees:** fee structures, assigning balances to active students, outstanding-balance views and receipt-backed payments allocated against assigned fee items.
-- **Messaging:** send messages to active users or a role audience. Message, recipients, notifications and audit entry are recorded transactionally.
-
-These endpoints are mounted under `/api/admin/operations` and remain behind the existing administrator authentication/role middleware. The primary SQL schema now includes the operational tables already defined in the XAMPP schema. Fresh databases should apply `database/schema.sql`; XAMPP-based local setups may continue importing `database/xampp/murama_school_xampp.sql`.
-
-No live data is seeded automatically. Empty tables produce empty states; the school must enter real academic terms, students, assessments, fee structures and other records before operational totals or workflows can be used. Build checks do not replace end-to-end tests against a configured MySQL database.
-
-## Public school website
-
-The public homepage is built around the live public API contracts:
-- School name, address, email and phone from `GET /api/public/school`
-- Published all-audience announcements from `GET /api/public/announcements`
-- English/Kinyarwanda switching, accessible navigation, responsive layouts, retry states, and direct email/phone links when the school has published those details
-- A direct link to the protected administration portal
-
-The previous future-feature tiles and copy about unimplemented school modules have been removed. The site does not fabricate school statistics, gallery entries, attendance, grades or events. Any additional public modules need real backend endpoints and school data before they should be shown as operational.
-
-## Modern administration workspace
-
-The administrator interface uses a responsive navigation shell and a live operations dashboard. The overview fetches student records, enrollment, user accounts, academic years/classes, announcements, audit activity, and MySQL health from existing API endpoints. If an endpoint is unavailable, that metric is shown as unavailable instead of substituting sample data.
-
-The existing functional modules remain API-backed:
-- Student register and enrollment
-- Academic years, terms, classes, streams and subjects
-- Account roles and access status
-- School settings
-- Announcements
-- Audit activity
-
-The user account table supports live text search and role/status filtering. The responsive sidebar adapts to smaller screens. No attendance, grading, fee collection, parent portal or report-card UI is presented as operational because those workflows do not yet have complete backend APIs in this repository.
-
-## Supabase Google sign-in
-
-A separate feature branch adds Google sign-in through Supabase Auth while retaining MySQL as the source of truth for school accounts, roles, and access permissions. The existing email/password login remains available.
-
-Read **[Supabase Google sign-in setup](docs/supabase-google-auth.md)** before enabling it. Google sign-in requires a Supabase project, Google OAuth provider configuration, redirect allow-list entries, and local environment variables. It does not automatically provision school accounts or grant administrator access.
-
-## Planned stages
-
-1. Foundation
-2. Public website
-3. Database foundation
-4. Authentication and RBAC
-5. Admin CMS
-6. Academic management
-7. Parent and student portals
-8. Timetable and attendance
-9. Communication and notifications
-10. Finance and reporting
-11. Production deployment, security, testing, and backups
+The SQL translation regression tests run without a live database. Build and unit tests do not replace an end-to-end pass against the school's own Supabase project, real imported records, provider configuration and user accounts. No Supabase project credentials are stored in this repository.

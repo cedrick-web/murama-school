@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { motion } from 'motion/react'
+import { Button } from '@/components/ui/button'
 import './dashboard.css'
 
 interface ApiEnvelope {
@@ -125,7 +127,12 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
   const firstName = userName.trim().split(/\s+/)[0] || 'Administrator'
 
   return (
-    <div className="dashboard-root">
+    <motion.div
+      className="dashboard-root"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.24, ease: 'easeOut' }}
+    >
       <section className="dashboard-welcome">
         <div>
           <span className="dashboard-kicker">SCHOOL OPERATIONS · LIVE OVERVIEW</span>
@@ -137,10 +144,10 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
           </div>
         </div>
         <div className="dashboard-welcome-actions">
-          <button type="button" className="dashboard-refresh-button" onClick={() => void loadDashboard()} disabled={loading}>
+          <Button variant="outline" size="sm" className="dashboard-refresh-button" onClick={() => void loadDashboard()} disabled={loading}>
             <svg viewBox="0 0 24 24" aria-hidden="true" className={loading ? 'is-spinning' : ''}><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.7 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.3 15"/></svg>
             {loading ? 'Refreshing' : 'Refresh data'}
-          </button>
+          </Button>
           <span className="dashboard-updated">{lastUpdated ? 'Updated ' + safeDate(lastUpdated.toISOString(), true) : 'Waiting for live data'}</span>
         </div>
       </section>
@@ -156,7 +163,7 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
       <div className="dashboard-section-heading">
         <div><h3>Operational snapshot</h3><p>Counts are loaded from the school API, not sample data.</p></div>
         <span className={'dashboard-connection ' + (database?.status === 'connected' ? 'is-connected' : 'is-disconnected')}>
-          <span />{database?.status === 'connected' ? 'MySQL connected' : database ? 'MySQL unavailable' : 'Database status unknown'}
+          <span />{database?.status === 'connected' ? 'Supabase PostgreSQL connected' : database ? 'Supabase PostgreSQL unavailable' : 'Database status unknown'}
         </span>
       </div>
 
@@ -245,6 +252,6 @@ export default function DashboardPanel({ token, userName, onNavigate }: Dashboar
           </button>
         </div>
       </section>
-    </div>
+    </motion.div>
   )
 }

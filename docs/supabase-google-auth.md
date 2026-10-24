@@ -1,52 +1,36 @@
-# Supabase Google sign-in for Murama School
+# Supabase Google sign-in
 
-This is an additive identity integration. Express, MySQL school records and roles, password login, existing JWTs, and administrator APIs remain unchanged.
+Murama School uses Supabase Auth to verify the provider identity and Supabase PostgreSQL for application records. The school account/role system remains authoritative: users must already exist in **public.users**, must be active, and the database role attached to that account determines what the school API permits.
 
-## Flow and access policy
+## Configure the provider
 
-The /admin Google button starts Supabase OAuth with authorization code + PKCE. Supabase Auth handles the OAuth state check and the client uses a PKCE code verifier to exchange the one-time authorization code, then sends the short-lived access token to Express. Express validates it remotely through Supabase Auth, requires Google as the identity provider and a verified email, looks for an existing active MySQL user, and then issues the existing Murama JWT using the role already assigned in MySQL.
+1. Open the existing **muramaSDMS** project (`ilmvmqxmasgasrtokjmz`) and then **Authentication → Providers → Google**.
+2. Configure Google OAuth client credentials as directed by Supabase and enable the provider.
+3. In **Authentication → URL Configuration**, add the local frontend URL and the exact production callback/redirect destinations used by the Google sign-in flow. Keep redirect entries restricted to domains owned by the school.
+4. Configure the backend environment variables from **backend/.env.example**: **SUPABASE_URL**, **SUPABASE_PUBLISHABLE_KEY**, **SUPABASE_DB_URL**, and **JWT_SECRET**.
+5. Configure the frontend variables in **frontend/.env.local**: **VITE_SUPABASE_URL**, **VITE_SUPABASE_PUBLISHABLE_KEY**, and **VITE_API_URL**.
 
-Google never creates school accounts and never grants a role. New or inactive users must be provisioned/reactivated by an administrator. Existing role-protected APIs remain authoritative. public.profiles stores optional supplementary profile fields under owner-only RLS; it is not used to authorize school actions.
+Publishable/anon keys are intended for browser use under proper RLS policies. Never expose the database URI, a Supabase service-role/secret key or **JWT_SECRET** in frontend code.
 
-## 1. Configure Supabase and Google
+## Identity-to-school-account flow
 
-1. Open or create a Supabase project.
-2. In Authentication > Providers > Google, enable Google and enter the Google OAuth client ID and secret.
-3. In Google Cloud Console, create a Web application OAuth client. Add the callback URL shown by Supabase, normally https://YOUR_PROJECT_REF.supabase.co/auth/v1/callback, as the Google authorized redirect URI.
-4. In Supabase Authentication > URL Configuration, allow http://localhost:5173/admin and the actual production callback, such as https://YOUR_PRODUCTION_HOST/admin.
-5. Apply supabase/migrations/20261024000000_profiles.sql with the Supabase SQL Editor or CLI. Check that profiles is accessible through the Data API if profile syncing is desired.
+1. The browser completes Supabase's OAuth flow and receives a Supabase access token.
+2. The backend verifies that token with Supabase Auth rather than trusting a decoded token from the browser.
+3. The verified email is matched to an existing school account in **public.users**.
+4. Inactive accounts and emails with no matching school account are rejected.
+5. The server issues the application's existing JWT using the role found in **public.roles**; role and status claims are not taken from editable Google/Supabase user metadata.
 
-Never place the Google client secret, Supabase secret key, or service-role key in frontend code or Git.
+This preserves the current school authorization contract while delegating Google identity verification to Supabase. The flow does not auto-create school accounts or grant roles.
 
-## 2. Configure local settings
+## Database and row-level security
 
-Copy frontend/.env.example to frontend/.env.local and set real values:
+The schema baseline lives in **supabase/migrations/**. School tables have RLS enabled and no blanket grants to browser roles. The server API connects using the backend-only Supabase PostgreSQL connection. **public.profiles** is solely for Supabase Auth identity metadata and has own-row RLS policies; it is not used to decide school roles.
 
-    VITE_API_URL=http://localhost:5000
-    VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-    VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
+## Verification checklist
 
-Add the following to backend/.env:
-
-    SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-    SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY
-
-The backend also supports SUPABASE_ANON_KEY as an alias. Keep the existing DB variables and strong JWT_SECRET. Do not use a service-role key for this flow. Restart Vite after changing environment values.
-
-## 3. Run and verify
-
-In two PowerShell terminals:
-
-    cd backend
-    npm install
-    npm run typecheck
-    npm run dev
-
-    cd frontend
-    npm install
-    npm run build
-    npm run dev
-
-Open http://localhost:5173/admin. Verify that an active admin with a verified Google email can sign in; missing and inactive users are denied; non-admins cannot access admin APIs; existing email/password login still works; and the profile RLS rules prevent access to another user's row.
-
-For production, use HTTPS and update the frontend API URL, Express CORS origin, Supabase redirect allow list, and hosting environment variables. The current rate limiter is process-local, limited to this endpoint, and capped to bound memory; use a shared limiter store if you run multiple API instances and configure proxy trust carefully for your host. Profile sync is best-effort and will not block valid login if the profile migration is not applied. Existing school records are not migrated to Supabase by this change.
+- Google sign-in succeeds for an email attached to an existing active school account.
+- A verified but unknown email is rejected without creating a school user.
+- A matching inactive account is rejected.
+- After sign-in, check that the API JWT carries the database role, not a client-supplied role.
+- Verify the configured callback in both Supabase and Google OAuth settings.
+- Do not treat a successful frontend OAuth redirect as proof of application authorization; test the API response too.
