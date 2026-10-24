@@ -19,13 +19,20 @@ export function createRateLimiter(windowMs: number, maxRequests: number): Reques
 
     if (!entry || entry.resetAt <= now) {
       entry = { count: 0, resetAt: now + windowMs }
-      buckets.set(key, entry)
     }
+    // Move this client to the newest position before bounded-map eviction.
+    buckets.delete(key)
+    buckets.set(key, entry)
 
-    // Opportunistically remove expired entries to keep memory bounded.
+    // Opportunistically remove expired entries, then hard-cap memory usage.
     if (buckets.size > 5000) {
       for (const [address, bucket] of buckets) {
         if (bucket.resetAt <= now) buckets.delete(address)
+      }
+      while (buckets.size > 5000) {
+        const oldest = buckets.keys().next().value
+        if (oldest === undefined) break
+        buckets.delete(oldest)
       }
     }
 
