@@ -27,7 +27,7 @@ interface Payment { id: number; receiptNumber: string; admissionNumber: string; 
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
 interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
 
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
+const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(apiUrl + path, {
     ...options,
