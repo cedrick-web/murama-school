@@ -567,6 +567,32 @@ CREATE INDEX IF NOT EXISTS idx_gallery_published_at ON public.gallery_items (pub
 CREATE INDEX IF NOT EXISTS idx_audit_user ON public.audit_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON public.audit_logs (entity_type, entity_id);
 
+-- Foreign-key and operational query indexes: PostgreSQL does not automatically
+-- index referencing columns as MySQL/InnoDB commonly does.
+CREATE INDEX IF NOT EXISTS idx_ms_user_roles_role ON public.user_roles (role_id);
+CREATE INDEX IF NOT EXISTS idx_ms_terms_year_dates ON public.terms (academic_year_id, starts_on, ends_on);
+CREATE INDEX IF NOT EXISTS idx_ms_enroll_year_class_term ON public.student_enrollments (academic_year_id, class_id, term_id, enrollment_status);
+CREATE INDEX IF NOT EXISTS idx_ms_enroll_student_year ON public.student_enrollments (student_id, academic_year_id);
+CREATE INDEX IF NOT EXISTS idx_ms_teacher_subjects_year_class ON public.teacher_subjects (academic_year_id, class_id, subject_id);
+CREATE INDEX IF NOT EXISTS idx_ms_assessment_term_class ON public.assessments (term_id, class_id, assessment_date);
+CREATE INDEX IF NOT EXISTS idx_ms_assessment_results_student ON public.assessment_results (student_id, assessment_id);
+CREATE INDEX IF NOT EXISTS idx_ms_grades_student_term ON public.grades (student_id, term_id);
+CREATE INDEX IF NOT EXISTS idx_ms_report_cards_student_term ON public.report_cards (student_id, term_id);
+CREATE INDEX IF NOT EXISTS idx_ms_attendance_class_term_date ON public.attendance_records (class_id, term_id, attendance_date);
+CREATE INDEX IF NOT EXISTS idx_ms_attendance_student_term ON public.attendance_records (student_id, term_id, attendance_date);
+CREATE INDEX IF NOT EXISTS idx_ms_timetable_year_term_day ON public.timetable_entries (academic_year_id, term_id, day_of_week, starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_ms_timetable_teacher_day ON public.timetable_entries (teacher_id, day_of_week, starts_at) WHERE teacher_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ms_timetable_class_day ON public.timetable_entries (class_id, stream_id, day_of_week, starts_at);
+CREATE INDEX IF NOT EXISTS idx_ms_fee_structures_year_class ON public.fee_structures (academic_year_id, class_id);
+CREATE INDEX IF NOT EXISTS idx_ms_fee_items_student_status ON public.fee_items (student_id, status);
+CREATE INDEX IF NOT EXISTS idx_ms_fee_items_structure ON public.fee_items (fee_structure_id);
+CREATE INDEX IF NOT EXISTS idx_ms_invoices_student_status ON public.invoices (student_id, status);
+CREATE INDEX IF NOT EXISTS idx_ms_payments_student_paid ON public.payments (student_id, paid_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ms_payments_invoice ON public.payments (invoice_id) WHERE invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_ms_messages_sender_sent ON public.messages (sender_user_id, sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ms_message_recipients_user ON public.message_recipients (recipient_user_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_ms_notifications_user_read_created ON public.notifications (user_id, read_at, created_at DESC);
+
 -- Supabase Data API hardening: all school tables are private unless an explicit
 -- policy and grant is added later. Backend traffic connects through the
 -- server-side PostgreSQL connection string and never exposes a secret to React.
