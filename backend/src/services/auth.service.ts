@@ -46,6 +46,23 @@ export async function login(email: string, password: string): Promise<LoginResul
   return { user }
 }
 
+export async function loginWithVerifiedEmail(email: string): Promise<LoginResult | null> {
+  const [rows] = await pool.execute(
+    'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.is_active, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE LOWER(u.email) = LOWER(?) LIMIT 1',
+    [email],
+  )
+
+  const row = (rows as Record<string, unknown>[])[0]
+  if (!row || !Boolean(row.is_active)) return null
+
+  const user = mapUser(row)
+  await pool.execute(
+    'UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [user.id],
+  )
+  return { user }
+}
+
 export async function getUserById(id: number): Promise<AuthUser | null> {
   const [rows] = await pool.execute(
     'SELECT u.id, u.first_name, u.last_name, u.email, u.phone, u.is_active, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? LIMIT 1',
