@@ -364,11 +364,27 @@ router.post('/report-cards/generate', async (req: AuthenticatedRequest, res) => 
 
     let previousScore: number | null = null
     let currentRank = 0
-    const generated = reportRows.map((row, index) => {
+    const generated: Array<{
+      studentId: number
+      admissionNumber: string
+      firstName: string
+      lastName: string
+      averageScore: number | null
+      classPosition: number | null
+      attendancePercentage: number | null
+    }> = reportRows.map((row, index) => {
       const avg = row.averageScore === null ? null : Number(row.averageScore)
       if (avg !== null && avg !== previousScore) currentRank = index + 1
       if (avg !== null) previousScore = avg
-      return { ...row, averageScore: avg, classPosition: avg === null ? null : currentRank }
+      return {
+        studentId: Number(row.studentId),
+        admissionNumber: String(row.admissionNumber),
+        firstName: String(row.firstName),
+        lastName: String(row.lastName),
+        averageScore: avg,
+        classPosition: avg === null ? null : currentRank,
+        attendancePercentage: row.attendancePercentage === null ? null : Number(row.attendancePercentage),
+      }
     })
 
     await withTransaction(async (connection) => {
