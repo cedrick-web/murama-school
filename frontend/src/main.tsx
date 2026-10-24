@@ -23,7 +23,7 @@ interface ApiEnvelope {
   message?: string
 }
 
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
+const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 
 async function getPublicData<T>(path: string): Promise<T> {
   const response = await fetch(apiUrl + path)
