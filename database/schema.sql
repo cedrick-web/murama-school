@@ -109,6 +109,292 @@ CREATE TABLE IF NOT EXISTS subjects (
   UNIQUE KEY uq_subjects_code (code)
 ) ENGINE=InnoDB;
 
+-- Core school operations tables: student, attendance, assessment, timetable,
+-- finance, messaging and notification records. These are additive to the base schema.
+
+CREATE TABLE IF NOT EXISTS teachers (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  employee_number VARCHAR(50) NULL,
+  qualification VARCHAR(255) NULL,
+  department VARCHAR(150) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_teacher_user (user_id),
+  UNIQUE KEY uq_teacher_employee (employee_number),
+  CONSTRAINT fk_teacher_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS students (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NULL,
+  admission_number VARCHAR(50) NOT NULL,
+  date_of_birth DATE NULL,
+  gender ENUM('MALE','FEMALE','OTHER') NULL,
+  admission_date DATE NULL,
+  status ENUM('ACTIVE','INACTIVE','GRADUATED','TRANSFERRED') NOT NULL DEFAULT 'ACTIVE',
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_student_admission (admission_number),
+  UNIQUE KEY uq_student_user (user_id),
+  CONSTRAINT fk_student_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS parents (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  occupation VARCHAR(150) NULL,
+  address VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_parent_user (user_id),
+  CONSTRAINT fk_parent_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS staff (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  employee_number VARCHAR(50) NULL,
+  department VARCHAR(150) NULL,
+  position_title VARCHAR(150) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_staff_user (user_id),
+  UNIQUE KEY uq_staff_employee (employee_number),
+  CONSTRAINT fk_staff_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS student_parents (
+  student_id BIGINT UNSIGNED NOT NULL,
+  parent_id BIGINT UNSIGNED NOT NULL,
+  relationship VARCHAR(50) NOT NULL,
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (student_id, parent_id),
+  CONSTRAINT fk_student_parents_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_student_parents_parent FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS student_enrollments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  academic_year_id BIGINT UNSIGNED NOT NULL,
+  term_id BIGINT UNSIGNED NULL,
+  class_id BIGINT UNSIGNED NOT NULL,
+  stream_id BIGINT UNSIGNED NULL,
+  enrollment_status ENUM('ACTIVE','COMPLETED','TRANSFERRED','WITHDRAWN') NOT NULL DEFAULT 'ACTIVE',
+  enrolled_on DATE NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_student_enrollment (student_id, academic_year_id, term_id),
+  CONSTRAINT fk_enrollment_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_enrollment_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+  CONSTRAINT fk_enrollment_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE SET NULL,
+  CONSTRAINT fk_enrollment_class FOREIGN KEY (class_id) REFERENCES classes(id),
+  CONSTRAINT fk_enrollment_stream FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS class_subjects (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  class_id BIGINT UNSIGNED NOT NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_class_subject (class_id, subject_id),
+  CONSTRAINT fk_class_subject_class FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_class_subject_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  teacher_id BIGINT UNSIGNED NOT NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  class_id BIGINT UNSIGNED NOT NULL,
+  academic_year_id BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_teacher_subject (teacher_id, subject_id, class_id, academic_year_id),
+  CONSTRAINT fk_teacher_subject_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teacher_subject_subject FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teacher_subject_class FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_teacher_subject_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS assessments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  term_id BIGINT UNSIGNED NOT NULL,
+  class_id BIGINT UNSIGNED NOT NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  assessment_type ENUM('TEST','QUIZ','ASSIGNMENT','MIDTERM','FINAL','PRACTICAL','OTHER') NOT NULL,
+  max_score DECIMAL(8,2) NOT NULL,
+  assessment_date DATE NOT NULL,
+  created_by BIGINT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_assessment_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE,
+  CONSTRAINT fk_assessment_class FOREIGN KEY (class_id) REFERENCES classes(id),
+  CONSTRAINT fk_assessment_subject FOREIGN KEY (subject_id) REFERENCES subjects(id),
+  CONSTRAINT fk_assessment_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS assessment_results (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  assessment_id BIGINT UNSIGNED NOT NULL,
+  student_id BIGINT UNSIGNED NOT NULL,
+  score DECIMAL(8,2) NOT NULL,
+  remarks VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_assessment_result (assessment_id, student_id),
+  CONSTRAINT fk_result_assessment FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS grades (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  term_id BIGINT UNSIGNED NOT NULL,
+  student_id BIGINT UNSIGNED NOT NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  total_score DECIMAL(8,2) NOT NULL DEFAULT 0,
+  grade VARCHAR(10) NULL,
+  teacher_comment VARCHAR(500) NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_grade (term_id, student_id, subject_id),
+  CONSTRAINT fk_grade_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE,
+  CONSTRAINT fk_grade_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_grade_subject FOREIGN KEY (subject_id) REFERENCES subjects(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS report_cards (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  term_id BIGINT UNSIGNED NOT NULL,
+  student_id BIGINT UNSIGNED NOT NULL,
+  average_score DECIMAL(8,2) NULL,
+  class_position INT UNSIGNED NULL,
+  attendance_percentage DECIMAL(5,2) NULL,
+  general_comment TEXT NULL,
+  generated_at TIMESTAMP NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_report_card (term_id, student_id),
+  CONSTRAINT fk_report_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE,
+  CONSTRAINT fk_report_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS attendance_records (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  class_id BIGINT UNSIGNED NOT NULL,
+  term_id BIGINT UNSIGNED NOT NULL,
+  attendance_date DATE NOT NULL,
+  status ENUM('PRESENT','ABSENT','LATE','EXCUSED') NOT NULL,
+  note VARCHAR(255) NULL,
+  recorded_by BIGINT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_attendance (student_id, attendance_date),
+  CONSTRAINT fk_attendance_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_attendance_class FOREIGN KEY (class_id) REFERENCES classes(id),
+  CONSTRAINT fk_attendance_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE CASCADE,
+  CONSTRAINT fk_attendance_user FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS timetable_entries (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  class_id BIGINT UNSIGNED NOT NULL,
+  stream_id BIGINT UNSIGNED NULL,
+  subject_id BIGINT UNSIGNED NOT NULL,
+  teacher_id BIGINT UNSIGNED NULL,
+  day_of_week TINYINT UNSIGNED NOT NULL,
+  starts_at TIME NOT NULL,
+  ends_at TIME NOT NULL,
+  room VARCHAR(100) NULL,
+  academic_year_id BIGINT UNSIGNED NOT NULL,
+  term_id BIGINT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_timetable_class FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+  CONSTRAINT fk_timetable_stream FOREIGN KEY (stream_id) REFERENCES streams(id) ON DELETE SET NULL,
+  CONSTRAINT fk_timetable_subject FOREIGN KEY (subject_id) REFERENCES subjects(id),
+  CONSTRAINT fk_timetable_teacher FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_timetable_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+  CONSTRAINT fk_timetable_term FOREIGN KEY (term_id) REFERENCES terms(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS fee_structures (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  academic_year_id BIGINT UNSIGNED NOT NULL,
+  class_id BIGINT UNSIGNED NULL,
+  name VARCHAR(150) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  due_date DATE NULL,
+  description VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_fee_structure_year FOREIGN KEY (academic_year_id) REFERENCES academic_years(id) ON DELETE CASCADE,
+  CONSTRAINT fk_fee_structure_class FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS fee_items (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  fee_structure_id BIGINT UNSIGNED NOT NULL,
+  amount_due DECIMAL(12,2) NOT NULL,
+  amount_paid DECIMAL(12,2) NOT NULL DEFAULT 0,
+  status ENUM('UNPAID','PARTIAL','PAID','WAIVED') NOT NULL DEFAULT 'UNPAID',
+  PRIMARY KEY (id),
+  CONSTRAINT fk_fee_item_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_fee_item_structure FOREIGN KEY (fee_structure_id) REFERENCES fee_structures(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id BIGINT UNSIGNED NOT NULL,
+  invoice_number VARCHAR(50) NOT NULL,
+  total_amount DECIMAL(12,2) NOT NULL,
+  status ENUM('UNPAID','PARTIAL','PAID','CANCELLED') NOT NULL DEFAULT 'UNPAID',
+  issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  due_date DATE NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_invoice_number (invoice_number),
+  CONSTRAINT fk_invoice_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS payments (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  invoice_id BIGINT UNSIGNED NULL,
+  student_id BIGINT UNSIGNED NOT NULL,
+  receipt_number VARCHAR(50) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  payment_method ENUM('CASH','BANK','MOBILE_MONEY','CARD','OTHER') NOT NULL,
+  reference VARCHAR(100) NULL,
+  paid_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  received_by BIGINT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_receipt_number (receipt_number),
+  CONSTRAINT fk_payment_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL,
+  CONSTRAINT fk_payment_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_payment_receiver FOREIGN KEY (received_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS messages (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  sender_user_id BIGINT UNSIGNED NOT NULL,
+  subject VARCHAR(200) NOT NULL,
+  body LONGTEXT NOT NULL,
+  sent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_message_sender FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS message_recipients (
+  message_id BIGINT UNSIGNED NOT NULL,
+  recipient_user_id BIGINT UNSIGNED NOT NULL,
+  read_at TIMESTAMP NULL,
+  PRIMARY KEY (message_id, recipient_user_id),
+  CONSTRAINT fk_message_recipient_message FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+  CONSTRAINT fk_message_recipient_user FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  body TEXT NOT NULL,
+  type VARCHAR(50) NOT NULL DEFAULT 'general',
+  read_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT fk_notification_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS news (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   title VARCHAR(200) NOT NULL,
