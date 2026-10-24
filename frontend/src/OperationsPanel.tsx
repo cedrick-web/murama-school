@@ -173,7 +173,7 @@ function GradebookModule({ token }: { token: string }) {
   const [classId, setClassId] = useState('')
   const [view, setView] = useState<'marks' | 'reports'>('marks')
   const [reports, setReports] = useState<ReportCard[]>([])
-  const [form, setForm] = useState({ termId: '', classId: '', subjectId: '', title: '', assessmentType: 'TEST' as AssessmentType, maxScore: '100', assessmentDate: todayLocal })
+  const [form, setForm] = useState({ termId: '', classId: '', subjectId: '', title: '', assessmentType: 'TEST' as AssessmentType, maxScore: '100', assessmentDate: todayLocal() })
   const [loading, setLoading] = useState(false)
   const [marksLoading, setMarksLoading] = useState(false)
   const [saving, setSaving] = useState(false)
