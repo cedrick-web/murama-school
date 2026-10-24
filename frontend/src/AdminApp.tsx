@@ -549,7 +549,6 @@ export default function AdminApp() {
     </main>
   )
 }
-}
 
 function SettingsPanel({ token }: { token: string }) {
   const [settings, setSettings] = useState<SchoolSettings | null>(null)
