@@ -1,12 +1,18 @@
 [build]
-  base = "frontend"
-  command = "npm install && npm run build"
-  publish = "dist"
+  base = "."
+  command = "npm --prefix backend install && npm --prefix backend run build && npm --prefix frontend install && npm --prefix frontend run build"
+  publish = "frontend/dist"
 
 [build.environment]
   NODE_VERSION = "22"
 
-# React SPA routes (including /admin) must return the Vite entry point.
+[functions]
+  directory = "backend/netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["serverless-http", "express", "postgres", "bcryptjs", "jsonwebtoken"]
+
+# Same-origin Express API and React SPA. The API function is matched on /api/*.
+# Keep the API route declaration in backend/netlify/functions/api.mjs.
 [[redirects]]
   from = "/*"
   to = "/index.html"

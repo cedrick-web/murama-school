@@ -87,7 +87,7 @@ function hasGoogleCallback(): boolean {
   const params = new URLSearchParams(window.location.search)
   return params.has('code') || params.has('error') || params.has('error_description')
 }
-const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')
+const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/$/, '')
 
 async function request<T extends ApiResponse>(
   path: string,

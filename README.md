@@ -27,6 +27,22 @@ A bilingual school website and management system for Ecole Secondaire de Murama.
 5. Copy **frontend/.env.example** to **frontend/.env.local** and set **VITE_API_URL**, **VITE_SUPABASE_URL**, and **VITE_SUPABASE_PUBLISHABLE_KEY**. These frontend values must never include the database connection string, a service-role key or the platform JWT secret.
 6. Start the API and frontend in separate terminals with **npm run dev**. The frontend runs on port 5173 and the API on port 5000 by default.
 
+
+## Netlify full-stack deployment
+
+The production Netlify configuration builds both packages and exposes the existing Express API through a same-origin Netlify Function at `/api/*`. The React frontend uses relative API paths in production; local development continues to default to `http://localhost:5000`.
+
+Before deploying, configure these **production Function-scoped** variables in Netlify Project configuration → Environment variables:
+
+- `SUPABASE_DB_URL`: the PostgreSQL connection URI copied from Supabase Dashboard → Connect. For serverless hosting, choose the **Transaction pooler** URI (port 6543). Store the real password only in Netlify; never commit it.
+- `JWT_SECRET`: a private random secret of at least 32 characters.
+- `SUPABASE_URL`: the existing project URL.
+- `SUPABASE_PUBLISHABLE_KEY`: the browser-safe publishable key used for Supabase Auth verification.
+- `FRONTEND_URL`: the deployed Netlify origin.
+- `DB_POOL_SIZE`: `1` for serverless invocations.
+
+Link the GitHub repository `cedrick-web/murama-school` to the Netlify site with `main` as its production branch so future commits build and publish automatically. After the first deploy, verify `/api/health` and `/api/health/database`, then test a real create/read/update through the authenticated school UI. The database schema contains no real school accounts until the backed-up XAMPP/MySQL database is imported, and the initial administrator must be created securely before admin operations can be tested.
+
 ## Existing MySQL/XAMPP data transfer
 
 If the school already has records in MySQL, take a full backup of that database first. Apply the Supabase schema migration to the target project before importing records. Configure **MYSQL_URL**, or **MYSQL_HOST/MYSQL_PORT/MYSQL_DATABASE/MYSQL_USER/MYSQL_PASSWORD**, in **backend/.env** for the old source database. Then, from **backend/**, run:

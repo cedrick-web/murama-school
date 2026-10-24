@@ -21,7 +21,8 @@
     "jsonwebtoken": "latest",
     "morgan": "latest",
     "mysql2": "latest",
-    "postgres": "3.4.9"
+    "postgres": "3.4.9",
+    "serverless-http": "4.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "latest",
