@@ -60,6 +60,16 @@ test('adds RETURNING id only for route inserts whose existing response reads ins
   assert.equal(noId.text, 'INSERT INTO message_recipients (message_id, recipient_user_id) VALUES ($1, $2)')
 })
 
+test('quotes camelCase aliases when they are referenced by ORDER BY', () => {
+  const query = translateMysqlQuery(
+    'SELECT AVG(score) AS averageScore, COUNT(*) AS markedCount FROM assessment_results ORDER BY averageScore DESC NULLS LAST',
+  )
+  assert.equal(
+    query.text,
+    'SELECT AVG(score) AS "averageScore", COUNT(*) AS "markedCount" FROM assessment_results ORDER BY "averageScore" DESC NULLS LAST',
+  )
+})
+
 test('normalises numeric PostgreSQL strings only in identifier and metric fields', () => {
   assert.deepEqual(
     normalisePostgresRows([{
