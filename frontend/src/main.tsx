@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AdminApp from './AdminApp'
 import './styles.css'
@@ -11,112 +11,140 @@ interface PublicSchool {
   contactPhone: string
   address: string
 }
-
 interface PublicAnnouncement {
   id: number
   title: string
   message: string
   publishedAt: string
 }
-
-interface PublicResponse {
+interface ApiEnvelope {
   success?: boolean
   message?: string
-  school?: PublicSchool
-  announcements?: PublicAnnouncement[]
 }
 
-const publicApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')
+const apiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/+$/, '')
 
-async function getPublicData<T extends PublicResponse>(path: string): Promise<T> {
-  const response = await fetch(`${publicApiUrl}${path}`)
-  const result: PublicResponse | null = await response.json().catch(() => null)
-  if (!response.ok || !result?.success) {
-    throw new Error(result?.message ?? `Request failed (${response.status})`)
+async function getPublicData<T>(path: string): Promise<T> {
+  const response = await fetch(apiUrl + path)
+  const result = await response.json().catch(() => null) as (ApiEnvelope & Record<string, unknown>) | null
+  if (!response.ok || !result || result.success !== true) {
+    throw new Error(result?.message ?? ('Request failed (' + response.status + ')'))
   }
   return result as T
 }
 
-const content = {
+const copy = {
   en: {
-    nav: ['Home', 'About', 'Academics', 'News', 'Gallery', 'Contact'],
-    language: 'Kinyarwanda',
-    badge: 'Learning • Character • Excellence',
-    title: 'A school community built for a brighter future.',
-    intro:
-      'Welcome to Ecole Secondaire de Murama. Our digital platform will connect students, parents, teachers, and school administration in one simple and trusted place.',
-    primary: 'Discover our school',
-    secondary: 'School updates',
-    stats: [
-      ['01', 'Strong learning culture'],
-      ['02', 'Supportive community'],
-      ['03', 'Future-ready skills'],
-    ],
-    aboutLabel: 'ABOUT MURAMA',
-    aboutTitle: 'A modern school experience, without making school life complicated.',
-    aboutText:
-      'The Murama platform is being designed to make important school information easier to find, communication easier to manage, and academic services easier to access.',
-    cards: [
-      ['Academic excellence', 'Clear information about subjects, programs, academic periods, and learning activities.'],
-      ['Parent connection', 'Important announcements and school communication in one accessible place.'],
-      ['Student growth', 'A digital environment that supports learning, activities, achievements, and student life.'],
-    ],
-    updatesLabel: 'WHAT COMES NEXT',
-    updatesTitle: 'More than a school website.',
-    updatesText:
-      'This foundation will grow into a complete school platform with public information, administration tools, academic management, communication, reports, and secure user portals.',
-    cta: 'Explore the platform',
-    announcementsHeading: 'Latest school announcements',
-    announcementsLoading: 'Loading school updates…',
-    announcementsEmpty: 'There are no public announcements right now.',
-    announcementsError: 'School announcements could not be loaded.',
-    schoolDetailsError: 'School contact details could not be loaded.',
-    noContactDetails: 'Contact details will be published here.',
-    footer: 'Ecole Secondaire de Murama',
-    footerText: 'Learning today. Building tomorrow.',
+    navHome: 'Home',
+    navSchool: 'School information',
+    navUpdates: 'Announcements',
+    navContact: 'Contact',
+    switchLanguage: 'Kinyarwanda',
+    portal: 'Administration portal',
+    eyebrow: 'ECOLE SECONDAIRE DE MURAMA',
+    heroTitle: 'A school community, connected.',
+    heroLead: 'Find the school information that has been published, follow official announcements, and reach the school through its verified contact details.',
+    exploreSchool: 'School information',
+    latestUpdates: 'Latest announcements',
+    liveUpdates: 'PUBLISHED SCHOOL UPDATES',
+    updatesCaption: 'Official notices published by the school',
+    publishedUpdates: 'Published updates',
+    updateCount: 'available now',
+    schoolDetails: 'School information',
+    schoolDetailsIntro: 'School contact details and public information are maintained by the school administration.',
+    contactEmail: 'Email',
+    contactPhone: 'Phone',
+    address: 'Address',
+    notPublished: 'Not published',
+    schoolInfoUnavailable: 'School information could not be loaded.',
+    updatesHeading: 'Official announcements',
+    updatesIntro: 'Published announcements for the school community. Updates shown here are retrieved from the school system.',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing…',
+    loadingUpdates: 'Loading published announcements…',
+    noUpdates: 'There are no published announcements at the moment.',
+    updatesUnavailable: 'Announcements could not be loaded. Check the connection and try again.',
+    retry: 'Try again',
+    publishedOn: 'Published',
+    contactTitle: 'Need to reach the school?',
+    contactText: 'Use the contact details maintained by the school administration. If a detail is not shown, it has not been published in the school system.',
+    contactSchool: 'Contact the school',
+    openPortal: 'Open administration portal',
+    portalCaption: 'Restricted to authorised school administrators',
+    footerLine: 'Official school information and published updates.',
+    footerLink: 'Administration',
+    serviceLabel: 'Connected school information',
+    actualData: 'Live school data',
+    bilingual: 'English and Kinyarwanda',
+    secureAdmin: 'Protected administration',
+    loadingSchool: 'Loading school information…',
+    schoolLoadFailed: 'Some school information is temporarily unavailable.',
   },
   rw: {
-    nav: ['Ahabanza', 'Ishuri', 'Amasomo', 'Amakuru', 'Amafoto', 'Twandikire'],
-    language: 'English',
-    badge: 'Kwiga • Indangagaciro • Indashyikirwa',
-    title: 'Ishuri rihuza abantu n’ejo hazaza heza.',
-    intro:
-      'Murakaza neza kuri Ecole Secondaire de Murama. Uru rubuga ruzahuza abanyeshuri, ababyeyi, abarimu n’ubuyobozi bw’ishuri ahantu hamwe hizewe kandi horoshye gukoresha.',
-    primary: 'Menya ishuri ryacu',
-    secondary: 'Amakuru y’ishuri',
-    stats: [
-      ['01', 'Umuco wo kwiga'],
-      ['02', 'Umuryango w’ishuri'],
-      ['03', 'Ubumenyi bw’ejo'],
-    ],
-    aboutLabel: 'IBYEREKEYE MURAMA',
-    aboutTitle: 'Ubunararibonye bw’ishuri bugezweho, bworoshye gukoresha.',
-    aboutText:
-      'Uru rubuga rwa Murama rutegurwa kugira ngo amakuru y’ishuri aboneke byoroshye, itumanaho rirusheho kuba ryiza, ndetse serivisi z’amasomo zigerweho neza.',
-    cards: [
-      ['Indashyikirwa mu masomo', 'Amakuru asobanutse ku masomo, porogaramu, ibihe by’amashuri n’ibikorwa byo kwiga.'],
-      ['Guhuza ababyeyi', 'Amatangazo n’itumanaho by’ingenzi biboneka ahantu hamwe.'],
-      ['Iterambere ry’umunyeshuri', 'Ahantu h’ikoranabuhanga hafasha mu myigire, ibikorwa, impano n’ubuzima bw’umunyeshuri.'],
-    ],
-    updatesLabel: 'IBIZAKURIKIRA',
-    updatesTitle: 'Si urubuga rw’amakuru y’ishuri gusa.',
-    updatesText:
-      'Uru rufatiro ruzaguka rube sisitemu yuzuye y’ishuri irimo amakuru rusange, imicungire y’ishuri, amasomo, itumanaho, raporo n’imbuga z’abakoresha zifite umutekano.',
-    cta: 'Reba urubuga',
-    announcementsHeading: 'Amatangazo mashya y’ishuri',
-    announcementsLoading: 'Turimo kuzana amakuru y’ishuri…',
-    announcementsEmpty: 'Nta matangazo rusange ahari ubu.',
-    announcementsError: 'Amatangazo y’ishuri ntashoboye kugaragara.',
-    schoolDetailsError: 'Amakuru yo kuvugana n’ishuri ntashoboye kugaragara.',
-    noContactDetails: 'Amakuru yo kuvugana n’ishuri azashyirwa hano.',
-    footer: 'Ecole Secondaire de Murama',
-    footerText: 'Kwiga uyu munsi. Kubaka ejo.',
+    navHome: 'Ahabanza',
+    navSchool: 'Ibyerekeye ishuri',
+    navUpdates: 'Amatangazo',
+    navContact: 'Twandikire',
+    switchLanguage: 'English',
+    portal: 'Urubuga rw’ubuyobozi',
+    eyebrow: 'ECOLE SECONDAIRE DE MURAMA',
+    heroTitle: 'Umuryango w’ishuri uhuje.',
+    heroLead: 'Menya amakuru y’ishuri yashyizwe ahagaragara, ukurikirane amatangazo yemewe, kandi uvugane n’ishuri ukoresheje amakuru yaryo yo kurigeraho.',
+    exploreSchool: 'Amakuru y’ishuri',
+    latestUpdates: 'Amatangazo mashya',
+    liveUpdates: 'AMATANGAZO Y’ISHURI',
+    updatesCaption: 'Amakuru yemewe yashyizwe ahagaragara n’ishuri',
+    publishedUpdates: 'Amatangazo ari hanze',
+    updateCount: 'ahari ubu',
+    schoolDetails: 'Amakuru y’ishuri',
+    schoolDetailsIntro: 'Amakuru yo kuvugana n’ishuri n’andi makuru rusange acungwa n’ubuyobozi bw’ishuri.',
+    contactEmail: 'Imeyili',
+    contactPhone: 'Telefone',
+    address: 'Aderesi',
+    notPublished: 'Ntabwo yashyizwe ahagaragara',
+    schoolInfoUnavailable: 'Amakuru y’ishuri ntashoboye kugaragara.',
+    updatesHeading: 'Amatangazo yemewe',
+    updatesIntro: 'Amatangazo yashyizwe ahagaragara ku muryango w’ishuri. Aya makuru akurwa muri sisitemu y’ishuri.',
+    refresh: 'Kongera kureba',
+    refreshing: 'Birimo kuvugururwa…',
+    loadingUpdates: 'Turimo kuzana amatangazo yashyizwe ahagaragara…',
+    noUpdates: 'Nta matangazo yashyizwe ahagaragara ahari ubu.',
+    updatesUnavailable: 'Amatangazo ntashoboye kugaragara. Reba umurongo wa internet wongere ugerageze.',
+    retry: 'Ongera ugerageze',
+    publishedOn: 'Yashyizwe hanze',
+    contactTitle: 'Ukeneye kuvugana n’ishuri?',
+    contactText: 'Koresha amakuru yo kuvugana n’ishuri yashyizweho n’ubuyobozi. Amakuru atagaragara ntabwo arashyirwa muri sisitemu.',
+    contactSchool: 'Vugana n’ishuri',
+    openPortal: 'Fungura urubuga rw’ubuyobozi',
+    portalCaption: 'Abayobozi b’ishuri bemerewe ni bo barukoresha',
+    footerLine: 'Amakuru yemewe y’ishuri n’amatangazo yashyizwe hanze.',
+    footerLink: 'Ubuyobozi',
+    serviceLabel: 'Amakuru y’ishuri ahujwe na sisitemu',
+    actualData: 'Amakuru nyayo y’ishuri',
+    bilingual: 'Icyongereza n’Ikinyarwanda',
+    secureAdmin: 'Ubuyobozi burinzwe',
+    loadingSchool: 'Turimo kuzana amakuru y’ishuri…',
+    schoolLoadFailed: 'Bimwe mu makuru y’ishuri ntabonetse by’igihe gito.',
   },
 } as const
 
+function formatDate(value: string, language: Language): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const locale = language === 'en' ? 'en-RW' : 'rw-RW'
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(date)
+}
+
+function SchoolMark() {
+  return <span className="school-mark" aria-hidden="true">M</span>
+}
+
+function ArrowIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+}
+
 function App() {
   const [language, setLanguage] = useState<Language>('en')
-  const t = content[language]
   const [school, setSchool] = useState<PublicSchool>({
     schoolName: 'Ecole Secondaire de Murama',
     contactEmail: '',
@@ -124,185 +152,210 @@ function App() {
     address: '',
   })
   const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([])
-  const [announcementsLoading, setAnnouncementsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [announcementsError, setAnnouncementsError] = useState(false)
   const [schoolError, setSchoolError] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const t = copy[language]
 
-  useEffect(() => {
-    let active = true
-    getPublicData<{ school: PublicSchool }>('/api/public/school')
-      .then(({ school: result }) => {
-        if (active) setSchool(result)
-      })
-      .catch(() => {
-        if (active) setSchoolError(true)
-      })
-    getPublicData<{ announcements: PublicAnnouncement[] }>('/api/public/announcements')
-      .then(({ announcements: result }) => {
-        if (active) setAnnouncements(result)
-      })
-      .catch(() => {
-        if (active) setAnnouncementsError(true)
-      })
-      .finally(() => {
-        if (active) setAnnouncementsLoading(false)
-      })
-    return () => {
-      active = false
+  const loadPublicData = useCallback(async () => {
+    setRefreshing(true)
+    const [schoolResult, announcementsResult] = await Promise.allSettled([
+      getPublicData<{ school: PublicSchool }>('/api/public/school'),
+      getPublicData<{ announcements: PublicAnnouncement[] }>('/api/public/announcements'),
+    ])
+
+    if (schoolResult.status === 'fulfilled') {
+      setSchool(schoolResult.value.school)
+      setSchoolError(false)
+    } else {
+      setSchoolError(true)
     }
+
+    if (announcementsResult.status === 'fulfilled') {
+      setAnnouncements(announcementsResult.value.announcements)
+      setAnnouncementsError(false)
+    } else {
+      setAnnouncementsError(true)
+    }
+
+    setLoading(false)
+    setRefreshing(false)
   }, [])
 
-  function formatPublishedDate(value: string): string {
-    const date = new Date(value)
-    return Number.isNaN(date.getTime())
-      ? ''
-      : new Intl.DateTimeFormat(language === 'en' ? 'en' : 'rw', { dateStyle: 'medium' }).format(date)
-  }
+  useEffect(() => {
+    void loadPublicData()
+  }, [loadPublicData])
+
+  const schoolName = school.schoolName || 'Ecole Secondaire de Murama'
+  const publishedDate = announcements.length > 0 ? formatDate(announcements[0].publishedAt, language) : ''
+  const menuItems = [
+    { label: t.navHome, href: '#home' },
+    { label: t.navSchool, href: '#school' },
+    { label: t.navUpdates, href: '#updates' },
+    { label: t.navContact, href: '#contact' },
+  ]
 
   return (
-    <div className="site-shell">
-      <header className="site-header">
-        <a className="brand" href="#home" aria-label={t.footer}>
-          <span className="brand-mark">M</span>
-          <span>
-            <strong>ESM</strong>
-            <small>Murama School</small>
-          </span>
+    <div className="public-site">
+      <a className="skip-link" href="#main-content">{language === 'en' ? 'Skip to content' : 'Jya ku makuru nyamukuru'}</a>
+      <header className="public-header">
+        <a className="public-brand" href="#home" aria-label={schoolName}>
+          <SchoolMark />
+          <span className="public-brand-copy"><strong>{schoolName}</strong><small>{t.serviceLabel}</small></span>
         </a>
 
-        <nav className="desktop-nav" aria-label="Primary navigation">
-          {t.nav.map((item, index) => (
-            <a key={item} href={`#${['home', 'about', 'academics', 'news', 'gallery', 'contact'][index]}`}>
-              {item}
-            </a>
-          ))}
-        </nav>
-
-        <button
-          className="language-switcher"
-          onClick={() => setLanguage(language === 'en' ? 'rw' : 'en')}
-          type="button"
-          aria-label={`Switch language to ${t.language}`}
-        >
-          {t.language}
+        <button className="mobile-nav-toggle" type="button" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close navigation' : 'Open navigation'} onClick={() => setMenuOpen((current) => !current)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">{menuOpen ? <path d="m6 6 12 12M18 6 6 18"/> : <path d="M4 6h16M4 12h16M4 18h16"/>}</svg>
         </button>
+
+        <nav className={'public-nav' + (menuOpen ? ' is-open' : '')} aria-label="Main navigation">
+          {menuItems.map((item) => (
+            <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</a>
+          ))}
+          <a className="public-nav-admin" href="/admin" onClick={() => setMenuOpen(false)}>{t.portal}<ArrowIcon /></a>
+          <button className="language-toggle" type="button" onClick={() => setLanguage(language === 'en' ? 'rw' : 'en')}>{t.switchLanguage}</button>
+        </nav>
       </header>
 
-      <main>
-        <section className="hero" id="home">
-          <div className="hero-content">
-            <p className="eyebrow">{t.badge}</p>
-            <h1>{t.title}</h1>
-            <p className="hero-copy">{t.intro}</p>
-            <div className="hero-actions">
-              <a className="button button-primary" href="#about">{t.primary}</a>
-              <a className="button button-secondary" href="#news">{t.secondary}</a>
+      <main id="main-content">
+        <section className="public-hero" id="home">
+          <div className="public-hero-copy">
+            <div className="hero-eyebrow"><span />{t.eyebrow}</div>
+            <h1>{t.heroTitle}</h1>
+            <p className="public-hero-lead">{t.heroLead}</p>
+            <div className="public-hero-actions">
+              <a className="public-button primary" href="#school">{t.exploreSchool}<ArrowIcon /></a>
+              <a className="public-text-link" href="#updates">{t.latestUpdates}<span aria-hidden="true">↓</span></a>
+            </div>
+            <div className="public-hero-assurance">
+              <span className="assurance-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></span>
+              <span><strong>{t.actualData}</strong><small>{language === 'en' ? 'Information is loaded from the school API' : 'Amakuru akurwa muri sisitemu y’ishuri'}</small></span>
             </div>
           </div>
-          <div className="hero-panel" aria-label="Murama School highlights">
-            <div className="hero-panel-top">
-              <span>EST. SCHOOL PLATFORM</span>
-              <span>2026</span>
+
+          <aside className="public-live-panel" aria-label={t.latestUpdates}>
+            <div className="public-live-panel-head">
+              <span className="live-indicator"><span />{t.liveUpdates}</span>
+              <span className="public-live-number">{announcements.length.toString().padStart(2, '0')}</span>
             </div>
-            <div className="hero-orbit">
-              <span className="orbit-ring ring-one" />
-              <span className="orbit-ring ring-two" />
-              <span className="orbit-core">M</span>
+            <div className="public-live-panel-main">
+              <p className="live-panel-label">{t.publishedUpdates}</p>
+              <h2>{loading ? '…' : announcements.length.toLocaleString(language === 'en' ? 'en-RW' : 'rw-RW')}</h2>
+              <p>{t.updateCount}</p>
             </div>
-            <p>One connected place for the Murama school community.</p>
+            <div className="public-live-panel-divider" />
+            {loading ? (
+              <p className="live-panel-empty" aria-live="polite">{t.loadingUpdates}</p>
+            ) : announcementsError ? (
+              <div className="live-panel-empty"><p>{t.updatesUnavailable}</p><button type="button" onClick={() => void loadPublicData()}>{t.retry}</button></div>
+            ) : announcements.length > 0 ? (
+              <a className="live-featured-update" href="#updates">
+                <span className="featured-update-date">{publishedDate}</span>
+                <strong>{announcements[0].title}</strong>
+                <span className="featured-update-link">{t.latestUpdates}<ArrowIcon /></span>
+              </a>
+            ) : (
+              <p className="live-panel-empty">{t.noUpdates}</p>
+            )}
+            <div className="public-live-panel-foot"><span>{t.updatesCaption}</span><span aria-hidden="true">↗</span></div>
+          </aside>
+        </section>
+
+        <section className="public-proof-strip" aria-label={t.serviceLabel}>
+          <div><span className="proof-number">01</span><span><strong>{t.actualData}</strong><small>{language === 'en' ? 'School details from the connected API' : 'Amakuru ava muri sisitemu y’ishuri'}</small></span></div>
+          <div><span className="proof-number">02</span><span><strong>{t.bilingual}</strong><small>{language === 'en' ? 'Switch language at any time' : 'Hindura ururimi igihe cyose'}</small></span></div>
+          <div><span className="proof-number">03</span><span><strong>{t.secureAdmin}</strong><small>{language === 'en' ? 'Administrator access is separated' : 'Ubuyobozi bufite urubuga rwihariye'}</small></span></div>
+        </section>
+
+        <section className="public-school-section" id="school">
+          <div className="public-section-heading">
+            <span className="section-kicker">{language === 'en' ? 'THE SCHOOL' : 'ISHURI'}</span>
+            <h2>{t.schoolDetails}</h2>
+            <p>{t.schoolDetailsIntro}</p>
+          </div>
+          <div className="public-school-grid">
+            <article className="school-info-card school-info-primary">
+              <div className="school-info-card-top"><span className="school-info-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-6 9 6v11H3V9Z"/><path d="M9 20v-7h6v7M7 9h.01M17 9h.01"/></svg></span><span className="info-card-index">ESM / 01</span></div>
+              <h3>{schoolName}</h3>
+              <p>{school.address || t.notPublished}</p>
+              {schoolError && <span className="inline-data-warning">{t.schoolInfoUnavailable}</span>}
+            </article>
+
+            <article className="school-info-card">
+              <div className="school-info-card-top"><span className="school-info-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><span className="info-card-index">CONTACT / 02</span></div>
+              <h3>{t.contactEmail}</h3>
+              {school.contactEmail ? <a className="school-info-value" href={'mailto:' + school.contactEmail}>{school.contactEmail}</a> : <p className="school-info-unpublished">{t.notPublished}</p>}
+            </article>
+
+            <article className="school-info-card">
+              <div className="school-info-card-top"><span className="school-info-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h3l2 5-2 1.5a15 15 0 0 0 4.5 4.5L16 12l5 2v3a3 3 0 0 1-3 3A15 15 0 0 1 4 6a3 3 0 0 1 3-3Z"/></svg></span><span className="info-card-index">CONTACT / 03</span></div>
+              <h3>{t.contactPhone}</h3>
+              {school.contactPhone ? <a className="school-info-value" href={'tel:' + school.contactPhone}>{school.contactPhone}</a> : <p className="school-info-unpublished">{t.notPublished}</p>}
+            </article>
           </div>
         </section>
 
-        <section className="stats-strip" aria-label="School highlights">
-          {t.stats.map(([number, label]) => (
-            <div className="stat" key={number}>
-              <span>{number}</span>
-              <strong>{label}</strong>
+        <section className="public-updates-section" id="updates">
+          <div className="public-updates-header">
+            <div className="public-section-heading">
+              <span className="section-kicker">{language === 'en' ? 'SCHOOL COMMUNICATION' : 'ITUMANAHO RY’ISHURI'}</span>
+              <h2>{t.updatesHeading}</h2>
+              <p>{t.updatesIntro}</p>
             </div>
-          ))}
-        </section>
+            <button className="public-refresh-button" type="button" onClick={() => void loadPublicData()} disabled={refreshing}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" className={refreshing ? 'is-spinning' : ''}><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.7 9A7 7 0 0 1 18 6.5L20 12M4 12l2 5.5A7 7 0 0 0 18.3 15"/></svg>
+              {refreshing ? t.refreshing : t.refresh}
+            </button>
+          </div>
 
-        <section className="section section-light" id="about">
-          <div className="section-heading">
-            <p className="section-label">{t.aboutLabel}</p>
-            <h2>{t.aboutTitle}</h2>
-            <p>{t.aboutText}</p>
-          </div>
-          <div className="feature-grid" id="academics">
-            {t.cards.map(([title, text], index) => (
-              <article className="feature-card" key={title}>
-                <span className="feature-number">0{index + 1}</span>
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-dark" id="news">
-          <div className="section-heading dark-heading">
-            <p className="section-label">{t.updatesLabel}</p>
-            <h2>{t.updatesTitle}</h2>
-            <p>{t.updatesText}</p>
-            <a className="button button-light" href="#contact">{t.cta}</a>
-          </div>
-          <div className="public-updates-column">
-            <section className="public-announcements" aria-labelledby="public-announcements-heading">
-              <h3 id="public-announcements-heading">{t.announcementsHeading}</h3>
-              {announcementsLoading && <p aria-live="polite">{t.announcementsLoading}</p>}
-              {announcementsError && <p role="alert">{t.announcementsError}</p>}
-              {!announcementsLoading && !announcementsError && announcements.length === 0 && (
-                <p>{t.announcementsEmpty}</p>
-              )}
-              {!announcementsError && announcements.map((announcement) => (
-                <article className="public-announcement" key={announcement.id}>
-                  <h4>{announcement.title}</h4>
+          {loading ? (
+            <div className="public-updates-state" aria-live="polite"><span className="state-spinner" />{t.loadingUpdates}</div>
+          ) : announcementsError ? (
+            <div className="public-updates-state is-error" role="alert"><p>{t.updatesUnavailable}</p><button type="button" onClick={() => void loadPublicData()}>{t.retry}</button></div>
+          ) : announcements.length === 0 ? (
+            <div className="public-updates-state"><span className="empty-state-mark">—</span><p>{t.noUpdates}</p></div>
+          ) : (
+            <div className="public-announcement-grid">
+              {announcements.map((announcement, index) => (
+                <article className="public-announcement-card" key={announcement.id}>
+                  <div className="public-announcement-card-top"><span className="announcement-index">{String(index + 1).padStart(2, '0')}</span><time dateTime={announcement.publishedAt}>{formatDate(announcement.publishedAt, language)}</time></div>
+                  <h3>{announcement.title}</h3>
                   <p>{announcement.message}</p>
-                  {formatPublishedDate(announcement.publishedAt) && (
-                    <time dateTime={announcement.publishedAt}>
-                      {formatPublishedDate(announcement.publishedAt)}
-                    </time>
-                  )}
+                  <div className="announcement-card-bottom"><span>{t.publishedOn}</span><ArrowIcon /></div>
                 </article>
               ))}
-            </section>
-            <div className="future-grid" id="gallery">
-              <div className="future-card"><span>01</span><strong>Public website</strong><small>News, events, gallery and school information.</small></div>
-              <div className="future-card"><span>02</span><strong>School management</strong><small>Academic, staff, student and administrative workflows.</small></div>
-              <div className="future-card"><span>03</span><strong>Parent & student portals</strong><small>Secure access to communication and academic services.</small></div>
             </div>
-          </div>
+          )}
         </section>
 
-        <section className="contact-band" id="contact">
-          <div>
-            <p className="section-label">{school.schoolName.toUpperCase()}</p>
-            <h2>Learning today. Building tomorrow.</h2>
+        <section className="public-contact-section" id="contact">
+          <div className="contact-section-copy">
+            <span className="section-kicker">{language === 'en' ? 'GET IN TOUCH' : 'TWANDIKIRE'}</span>
+            <h2>{t.contactTitle}</h2>
+            <p>{t.contactText}</p>
           </div>
-          <div className="public-contact">
-            {schoolError && <p role="alert">{t.schoolDetailsError}</p>}
-            {school.contactEmail && <a className="button button-primary" href={`mailto:${school.contactEmail}`}>{school.contactEmail}</a>}
-            {school.contactPhone && <a className="button button-secondary" href={`tel:${school.contactPhone}`}>{school.contactPhone}</a>}
-            {school.address && <span>{school.address}</span>}
-            {!schoolError && !school.contactEmail && !school.contactPhone && !school.address && <span>{t.noContactDetails}</span>}
+          <div className="contact-section-actions">
+            {school.contactEmail && <a className="public-button primary" href={'mailto:' + school.contactEmail}>{t.contactEmail}<ArrowIcon /></a>}
+            {school.contactPhone && <a className="public-button outline" href={'tel:' + school.contactPhone}>{t.contactPhone}<ArrowIcon /></a>}
+            {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{t.notPublished}</span>}
+            <a className="contact-admin-link" href="/admin">{t.openPortal}<ArrowIcon /></a>
+            <small>{t.portalCaption}</small>
           </div>
         </section>
       </main>
 
-      <footer className="site-footer">
-        <div>
-          <strong>{school.schoolName || t.footer}</strong>
-          <span>{t.footerText}</span>
-        </div>
-        <span>© 2026 Murama School</span>
+      <footer className="public-footer">
+        <a className="footer-brand" href="#home"><SchoolMark /><span><strong>{schoolName}</strong><small>{t.footerLine}</small></span></a>
+        <span className="footer-copyright">© {new Date().getFullYear()} {schoolName}</span>
+        <a className="footer-admin-link" href="/admin">{t.footerLink}<ArrowIcon /></a>
       </footer>
     </div>
   )
 }
 
-const RootApp = window.location.pathname.replace(/\/+$/, '') === '/admin'
-  ? AdminApp
-  : App
+const RootApp = window.location.pathname.replace(/\/+$/, '') === '/admin' ? AdminApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
