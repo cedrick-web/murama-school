@@ -167,7 +167,7 @@ function quoteCaseSensitiveAliases(input: string): string {
 
 function numberForNumericField(key: string, value: unknown): unknown {
   if (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value)) return value
-  const numericKey = /^(id|.*Id|.*Count|.*Score|.*Position|.*Percentage|.*Amount|.*Due|.*Paid|.*Total|.*Outstanding|.*Items|.*No|.*Number|.*Rank)$/i.test(key)
+  const numericKey = /^(id|.*Id|.*Count|.*Score|.*Position|.*Percentage|.*Amount|.*Due|.*Paid|.*Total|.*Outstanding|.*Items|.*Rank)$/i.test(key)
   if (!numericKey) return value
   const number = Number(value)
   return Number.isFinite(number) ? number : value
