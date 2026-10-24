@@ -138,3 +138,6 @@
   .operations-tab,.operations-button { transition:none; }
   .operations-spinner { animation-duration:.01ms; }
 }
+
+.operations-row-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.operations-row-actions .operations-button { min-height:29px; padding-inline:8px; }
