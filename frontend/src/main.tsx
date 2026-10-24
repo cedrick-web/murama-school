@@ -1,8 +1,41 @@
-import { StrictMode, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
+import AdminApp from './AdminApp'
 import './styles.css'
 
 type Language = 'en' | 'rw'
+
+interface PublicSchool {
+  schoolName: string
+  contactEmail: string
+  contactPhone: string
+  address: string
+}
+
+interface PublicAnnouncement {
+  id: number
+  title: string
+  message: string
+  publishedAt: string
+}
+
+interface PublicResponse {
+  success?: boolean
+  message?: string
+  school?: PublicSchool
+  announcements?: PublicAnnouncement[]
+}
+
+const publicApiUrl = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000').replace(/\/$/, '')
+
+async function getPublicData<T extends PublicResponse>(path: string): Promise<T> {
+  const response = await fetch(`${publicApiUrl}${path}`)
+  const result: PublicResponse | null = await response.json().catch(() => null)
+  if (!response.ok || !result?.success) {
+    throw new Error(result?.message ?? `Request failed (${response.status})`)
+  }
+  return result as T
+}
 
 const content = {
   en: {
@@ -33,6 +66,12 @@ const content = {
     updatesText:
       'This foundation will grow into a complete school platform with public information, administration tools, academic management, communication, reports, and secure user portals.',
     cta: 'Explore the platform',
+    announcementsHeading: 'Latest school announcements',
+    announcementsLoading: 'Loading school updates…',
+    announcementsEmpty: 'There are no public announcements right now.',
+    announcementsError: 'School announcements could not be loaded.',
+    schoolDetailsError: 'School contact details could not be loaded.',
+    noContactDetails: 'Contact details will be published here.',
     footer: 'Ecole Secondaire de Murama',
     footerText: 'Learning today. Building tomorrow.',
   },
@@ -64,6 +103,12 @@ const content = {
     updatesText:
       'Uru rufatiro ruzaguka rube sisitemu yuzuye y’ishuri irimo amakuru rusange, imicungire y’ishuri, amasomo, itumanaho, raporo n’imbuga z’abakoresha zifite umutekano.',
     cta: 'Reba urubuga',
+    announcementsHeading: 'Amatangazo mashya y’ishuri',
+    announcementsLoading: 'Turimo kuzana amakuru y’ishuri…',
+    announcementsEmpty: 'Nta matangazo rusange ahari ubu.',
+    announcementsError: 'Amatangazo y’ishuri ntashoboye kugaragara.',
+    schoolDetailsError: 'Amakuru yo kuvugana n’ishuri ntashoboye kugaragara.',
+    noContactDetails: 'Amakuru yo kuvugana n’ishuri azashyirwa hano.',
     footer: 'Ecole Secondaire de Murama',
     footerText: 'Kwiga uyu munsi. Kubaka ejo.',
   },
@@ -72,6 +117,47 @@ const content = {
 function App() {
   const [language, setLanguage] = useState<Language>('en')
   const t = content[language]
+  const [school, setSchool] = useState<PublicSchool>({
+    schoolName: 'Ecole Secondaire de Murama',
+    contactEmail: '',
+    contactPhone: '',
+    address: '',
+  })
+  const [announcements, setAnnouncements] = useState<PublicAnnouncement[]>([])
+  const [announcementsLoading, setAnnouncementsLoading] = useState(true)
+  const [announcementsError, setAnnouncementsError] = useState(false)
+  const [schoolError, setSchoolError] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    getPublicData<{ school: PublicSchool }>('/api/public/school')
+      .then(({ school: result }) => {
+        if (active) setSchool(result)
+      })
+      .catch(() => {
+        if (active) setSchoolError(true)
+      })
+    getPublicData<{ announcements: PublicAnnouncement[] }>('/api/public/announcements')
+      .then(({ announcements: result }) => {
+        if (active) setAnnouncements(result)
+      })
+      .catch(() => {
+        if (active) setAnnouncementsError(true)
+      })
+      .finally(() => {
+        if (active) setAnnouncementsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  function formatPublishedDate(value: string): string {
+    const date = new Date(value)
+    return Number.isNaN(date.getTime())
+      ? ''
+      : new Intl.DateTimeFormat(language === 'en' ? 'en' : 'rw', { dateStyle: 'medium' }).format(date)
+  }
 
   return (
     <div className="site-shell">
@@ -160,25 +246,52 @@ function App() {
             <p>{t.updatesText}</p>
             <a className="button button-light" href="#contact">{t.cta}</a>
           </div>
-          <div className="future-grid" id="gallery">
-            <div className="future-card"><span>01</span><strong>Public website</strong><small>News, events, gallery and school information.</small></div>
-            <div className="future-card"><span>02</span><strong>School management</strong><small>Academic, staff, student and administrative workflows.</small></div>
-            <div className="future-card"><span>03</span><strong>Parent & student portals</strong><small>Secure access to communication and academic services.</small></div>
+          <div className="public-updates-column">
+            <section className="public-announcements" aria-labelledby="public-announcements-heading">
+              <h3 id="public-announcements-heading">{t.announcementsHeading}</h3>
+              {announcementsLoading && <p aria-live="polite">{t.announcementsLoading}</p>}
+              {announcementsError && <p role="alert">{t.announcementsError}</p>}
+              {!announcementsLoading && !announcementsError && announcements.length === 0 && (
+                <p>{t.announcementsEmpty}</p>
+              )}
+              {!announcementsError && announcements.map((announcement) => (
+                <article className="public-announcement" key={announcement.id}>
+                  <h4>{announcement.title}</h4>
+                  <p>{announcement.message}</p>
+                  {formatPublishedDate(announcement.publishedAt) && (
+                    <time dateTime={announcement.publishedAt}>
+                      {formatPublishedDate(announcement.publishedAt)}
+                    </time>
+                  )}
+                </article>
+              ))}
+            </section>
+            <div className="future-grid" id="gallery">
+              <div className="future-card"><span>01</span><strong>Public website</strong><small>News, events, gallery and school information.</small></div>
+              <div className="future-card"><span>02</span><strong>School management</strong><small>Academic, staff, student and administrative workflows.</small></div>
+              <div className="future-card"><span>03</span><strong>Parent & student portals</strong><small>Secure access to communication and academic services.</small></div>
+            </div>
           </div>
         </section>
 
         <section className="contact-band" id="contact">
           <div>
-            <p className="section-label">ECOLE SECONDAIRE DE MURAMA</p>
+            <p className="section-label">{school.schoolName.toUpperCase()}</p>
             <h2>Learning today. Building tomorrow.</h2>
           </div>
-          <a className="button button-primary" href="mailto:info@murama-school.example">Contact school</a>
+          <div className="public-contact">
+            {schoolError && <p role="alert">{t.schoolDetailsError}</p>}
+            {school.contactEmail && <a className="button button-primary" href={`mailto:${school.contactEmail}`}>{school.contactEmail}</a>}
+            {school.contactPhone && <a className="button button-secondary" href={`tel:${school.contactPhone}`}>{school.contactPhone}</a>}
+            {school.address && <span>{school.address}</span>}
+            {!schoolError && !school.contactEmail && !school.contactPhone && !school.address && <span>{t.noContactDetails}</span>}
+          </div>
         </section>
       </main>
 
       <footer className="site-footer">
         <div>
-          <strong>{t.footer}</strong>
+          <strong>{school.schoolName || t.footer}</strong>
           <span>{t.footerText}</span>
         </div>
         <span>© 2026 Murama School</span>
@@ -187,8 +300,12 @@ function App() {
   )
 }
 
+const RootApp = window.location.pathname.replace(/\/+$/, '') === '/admin'
+  ? AdminApp
+  : App
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <RootApp />
   </StrictMode>,
 )

@@ -387,6 +387,49 @@ a {
   align-content: center;
 }
 
+.public-updates-column {
+  display: grid;
+  gap: 36px;
+  align-content: center;
+}
+
+.public-announcements h3 {
+  margin: 0 0 16px;
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.public-announcements > p {
+  color: #bbcac0;
+  line-height: 1.6;
+}
+
+.public-announcement {
+  padding: 16px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.public-announcement h4 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.public-announcement p {
+  margin: 0;
+  color: #bbcac0;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.public-announcement time {
+  display: block;
+  margin-top: 10px;
+  color: #e7c978;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
 .future-card {
   display: grid;
   grid-template-columns: 45px 1fr;
@@ -422,6 +465,24 @@ a {
 .contact-band h2 {
   max-width: 680px;
   color: #183721;
+}
+
+.public-contact {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  color: #38513f;
+}
+
+.public-contact > span {
+  max-width: 380px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.public-contact .button-secondary {
+  border-color: rgba(18, 53, 36, 0.25);
+  background: rgba(255, 255, 255, 0.38);
 }
 
 .site-footer {

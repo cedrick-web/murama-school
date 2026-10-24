@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS users (
   CONSTRAINT fk_users_role FOREIGN KEY (role_id) REFERENCES roles(id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id BIGINT UNSIGNED NOT NULL,
+  role_id BIGINT UNSIGNED NOT NULL,
+  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, role_id),
+  CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS school_settings (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   setting_key VARCHAR(100) NOT NULL,
@@ -164,6 +173,22 @@ CREATE TABLE IF NOT EXISTS gallery_items (
   PRIMARY KEY (id),
   KEY idx_gallery_published_at (published_at),
   CONSTRAINT fk_gallery_uploader FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NULL,
+  action VARCHAR(100) NOT NULL,
+  entity_type VARCHAR(100) NULL,
+  entity_id BIGINT UNSIGNED NULL,
+  details JSON NULL,
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(500) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_audit_user (user_id),
+  INDEX idx_audit_entity (entity_type, entity_id),
+  CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 INSERT INTO roles (name, description)

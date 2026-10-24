@@ -7,6 +7,7 @@ import morgan from 'morgan'
 import { checkDatabaseConnection } from './config/database.js'
 import authRoutes from './routes/auth.routes.js'
 import adminRoutes from './routes/admin.routes.js'
+import publicRoutes from './routes/public.routes.js'
 
 dotenv.config()
 
@@ -19,6 +20,7 @@ app.use(morgan('dev'))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/public', publicRoutes)
 
 app.get('/', (_req, res) => {
   res.json({

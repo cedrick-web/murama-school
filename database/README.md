@@ -19,6 +19,7 @@ A successful connection returns HTTP 200 with `"status": "connected"`.
 The first schema establishes:
 
 - users and roles
+- user role assignments and audit logs
 - school settings
 - academic years and terms
 - classes and streams
@@ -28,7 +29,18 @@ The first schema establishes:
 - announcements
 - gallery images/videos
 
-The schema is deliberately limited to foundational entities. Academic marks, attendance, timetables, fees, parent/student relationships, and other workflows will be introduced in later verified stages.
+The admin API uses `user_roles` to track each account's current role assignment
+and writes administrative changes to `audit_logs`. Both tables are part of
+`schema.sql` and are also present in the complete XAMPP import.
+
+The admin academic setup manages academic years, terms, classes, streams, and
+subjects using the corresponding tables in both schema files. Academic marks,
+attendance, timetables, fees, parent/student relationships, and other workflows
+will be introduced in later verified stages.
+
+Student records and enrollments are managed from the admin workspace. New
+student login accounts are created inactive; activation is intentionally
+blocked until a secure invitation/password setup flow is configured.
 
 ## Security
 
