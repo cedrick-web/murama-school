@@ -50,8 +50,6 @@ function quoteIdentifier(identifier: string): string {
 }
 
 function sourceConfig(): mysql.ConnectionOptions {
-  const connectionString = process.env.MYSQL_URL
-  if (connectionString) return { uri: connectionString, supportBigNumbers: true, bigNumberStrings: true, timezone: 'Z' } as mysql.ConnectionOptions
   const host = process.env.MYSQL_HOST ?? process.env.DB_HOST
   const database = process.env.MYSQL_DATABASE ?? process.env.DB_NAME
   const user = process.env.MYSQL_USER ?? process.env.DB_USER
@@ -87,7 +85,10 @@ function convertValue(table: string, column: string, value: unknown): unknown {
 
 async function main(): Promise<void> {
   const batchSize = Math.min(500, Math.max(25, Number(process.env.MIGRATION_BATCH_SIZE ?? 200)))
-  const source = await mysql.createConnection(sourceConfig())
+  const mysqlUrl = process.env.MYSQL_URL?.trim()
+  const source = mysqlUrl
+    ? await mysql.createConnection(mysqlUrl)
+    : await mysql.createConnection(sourceConfig())
   const destination = postgres(destinationUrl!, {
     max: 1,
     connect_timeout: 10,
