@@ -13,6 +13,13 @@
 
 # Same-origin Express API and React SPA. The API function is matched on /api/*.
 # Keep the API route declaration in backend/netlify/functions/api.mjs.
+# Rewrite API paths to the Express Netlify Function before the SPA fallback.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
