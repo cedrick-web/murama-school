@@ -190,6 +190,7 @@ function App() {
 
   const schoolName = school.schoolName || 'Ecole Secondaire de Murama'
   const publishedDate = announcements.length > 0 ? formatDate(announcements[0].publishedAt, language) : ''
+  const missingSchoolDetail = loading ? t.loadingSchool : schoolError ? t.schoolInfoUnavailable : t.notPublished
   const menuItems = [
     { label: t.navHome, href: '#home' },
     { label: t.navSchool, href: '#school' },
@@ -279,14 +280,14 @@ function App() {
             <article className="school-info-card school-info-primary">
               <div className="school-info-card-top"><span className="school-info-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-6 9 6v11H3V9Z"/><path d="M9 20v-7h6v7M7 9h.01M17 9h.01"/></svg></span><span className="info-card-index">ESM / 01</span></div>
               <h3>{schoolName}</h3>
-              <p>{school.address || t.notPublished}</p>
+              <p>{school.address || missingSchoolDetail}</p>
               {schoolError && <span className="inline-data-warning">{t.schoolInfoUnavailable}</span>}
             </article>
 
             <article className="school-info-card">
               <div className="school-info-card-top"><span className="school-info-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></svg></span><span className="info-card-index">CONTACT / 02</span></div>
               <h3>{t.contactEmail}</h3>
-              {school.contactEmail ? <a className="school-info-value" href={'mailto:' + school.contactEmail}>{school.contactEmail}</a> : <p className="school-info-unpublished">{t.notPublished}</p>}
+              {school.contactEmail ? <a className="school-info-value" href={'mailto:' + school.contactEmail}>{school.contactEmail}</a> : <p className="school-info-unpublished">{missingSchoolDetail}</p>}
             </article>
 
             <article className="school-info-card">
@@ -339,7 +340,7 @@ function App() {
           <div className="contact-section-actions">
             {school.contactEmail && <a className="public-button primary" href={'mailto:' + school.contactEmail}>{t.contactEmail}<ArrowIcon /></a>}
             {school.contactPhone && <a className="public-button outline" href={'tel:' + school.contactPhone}>{t.contactPhone}<ArrowIcon /></a>}
-            {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{t.notPublished}</span>}
+            {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{missingSchoolDetail}</span>}
             <a className="contact-admin-link" href="/admin">{t.openPortal}<ArrowIcon /></a>
             <small>{t.portalCaption}</small>
           </div>
