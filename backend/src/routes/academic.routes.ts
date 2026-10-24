@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Response } from 'express'
-import type { PoolConnection } from 'mysql2/promise'
+import type { PoolConnection } from '../config/database.js'
 
 import { pool } from '../config/database.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
