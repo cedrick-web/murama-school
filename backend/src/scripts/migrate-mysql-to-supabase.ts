@@ -106,6 +106,14 @@ async function main(): Promise<void> {
     for (const table of tables) {
       const keys = primaryKeys[table]
       const orderBy = keys.map((key) => '`' + key + '`').join(', ')
+      const [presenceRows] = await source.query(
+        'SELECT TABLE_NAME AS tableName FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
+        [table],
+      )
+      if ((presenceRows as Array<Record<string, unknown>>).length === 0) {
+        console.warn(table + ': source table is absent; skipped because the legacy database predates this module')
+        continue
+      }
       const [countRows] = await source.query('SELECT COUNT(*) AS rowCount FROM `' + table + '`')
       const sourceCount = Number((countRows as Array<Record<string, unknown>>)[0]?.rowCount ?? 0)
       let copied = 0
