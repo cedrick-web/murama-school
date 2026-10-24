@@ -12,13 +12,13 @@ A bilingual school website and management system for Ecole Secondaire de Murama.
 
 ## Supabase project setup
 
-1. Create a Supabase project in the Dashboard and keep its database password private.
+1. Use the existing production Supabase project **muramaSDMS** (`ilmvmqxmasgasrtokjmz`, region `us-east-1`) and keep its database password private. Do not create a duplicate project.
 2. Copy **backend/.env.example** to **backend/.env**. Set **SUPABASE_DB_URL** to the Supabase **session pooler** URI from Dashboard → Connect, **SUPABASE_URL** to the project URL, **SUPABASE_PUBLISHABLE_KEY** to the publishable key, and a private **JWT_SECRET** of at least 32 characters. Do not use a service-role/secret key in frontend variables.
-3. Apply the checked-in database migration from the repository root:
+3. The initial school schema and performance/security hardening migrations have already been applied to this Supabase project. Their tracked files are in `supabase/migrations/`. To reconcile or apply later checked-in migrations from the repository root:
 
    ~~~powershell
    npx supabase login
-   npx supabase link --project-ref YOUR_PROJECT_REF
+   npx supabase link --project-ref ilmvmqxmasgasrtokjmz
    npx supabase db push
    ~~~
 
