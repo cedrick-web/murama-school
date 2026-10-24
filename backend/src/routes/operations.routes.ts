@@ -572,8 +572,8 @@ router.delete('/timetable/:entryId', async (req: AuthenticatedRequest, res) => {
 router.get('/fees/overview', async (_req, res) => {
   try {
     const [summaryRows] = await pool.execute(
-      'SELECT COUNT(*) AS itemCount, COALESCE(SUM(amount_due), 0) AS totalDue, COALESCE(SUM(amount_paid), 0) AS totalPaid, COALESCE(SUM(amount_due - amount_paid), 0) AS outstanding, SUM(status = ?) AS unpaidItems, SUM(status = ?) AS partialItems, SUM(status = ?) AS paidItems FROM fee_items',
-      ['UNPAID', 'PARTIAL', 'PAID'],
+      'SELECT COUNT(*) AS itemCount, COALESCE(SUM(amount_due), 0) AS totalDue, COALESCE(SUM(amount_paid), 0) AS totalPaid, COALESCE(SUM(CASE WHEN status <> ? THEN amount_due - amount_paid ELSE 0 END), 0) AS outstanding, SUM(status = ?) AS unpaidItems, SUM(status = ?) AS partialItems, SUM(status = ?) AS paidItems FROM fee_items',
+      ['WAIVED', 'UNPAID', 'PARTIAL', 'PAID'],
     )
     const [paymentRows] = await pool.execute(
       'SELECT COUNT(*) AS paymentCount, COALESCE(SUM(amount), 0) AS receivedTotal FROM payments',
@@ -713,12 +713,15 @@ router.post('/fees/assign', async (req: AuthenticatedRequest, res) => {
   }
   try {
     const result = await withTransaction(async (connection) => {
-      const [structureRows] = await connection.execute('SELECT id, amount, class_id AS classId FROM fee_structures WHERE id = ? FOR UPDATE', [feeStructureId])
+      const [structureRows] = await connection.execute('SELECT id, academic_year_id AS academicYearId, amount, class_id AS classId FROM fee_structures WHERE id = ? FOR UPDATE', [feeStructureId])
       const structure = (structureRows as Record<string, unknown>[])[0]
       if (!structure) throw new OperationError('Fee structure not found', 404)
-      const [studentRows] = await connection.execute('SELECT id FROM students WHERE id IN (?) AND status = ?', [ids, 'ACTIVE'])
+      const [studentRows] = await connection.execute(
+        'SELECT DISTINCT s.id FROM students s INNER JOIN student_enrollments e ON e.student_id = s.id WHERE s.status = ? AND e.enrollment_status = ? AND e.academic_year_id = ? AND (? IS NULL OR e.class_id = ?) AND s.id IN (?)',
+        ['ACTIVE', 'ACTIVE', Number(structure.academicYearId), structure.classId === null ? null : Number(structure.classId), structure.classId === null ? null : Number(structure.classId), ids],
+      )
       const activeStudentIds = new Set((studentRows as Array<{ id: number }>).map((row) => Number(row.id)))
-      if (activeStudentIds.size !== ids.length) throw new OperationError('One or more students are not active', 409)
+      if (activeStudentIds.size !== ids.length) throw new OperationError('One or more selected students are not actively enrolled in this fee structure’s academic year and class', 409)
       let assigned = 0
       let skipped = 0
       for (const studentId of ids as number[]) {
