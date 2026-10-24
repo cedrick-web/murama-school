@@ -170,6 +170,9 @@ export default function AdminApp() {
   )
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const [userRoleFilter, setUserRoleFilter] = useState<'ALL' | UserRole>('ALL')
+  const [userStatusFilter, setUserStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL')
   const [busyUserId, setBusyUserId] = useState<number | null>(null)
   const [section, setSection] = useState<AdminSection>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
@@ -353,6 +356,15 @@ export default function AdminApp() {
     }
   }
 
+  const visibleUsers = users.filter((account) => {
+    const query = userSearch.trim().toLowerCase()
+    const searchable = [account.firstName, account.lastName, account.email ?? '', account.phone ?? ''].join(' ').toLowerCase()
+    const active = account.isActive === true || account.isActive === 1
+    return (!query || searchable.includes(query))
+      && (userRoleFilter === 'ALL' || account.role === userRoleFilter)
+      && (userStatusFilter === 'ALL' || (userStatusFilter === 'ACTIVE' ? active : !active))
+  })
+
   if (status === 'checking' || oauthProcessing) {
     return <main className="admin-loading" aria-live="polite">{oauthProcessing ? 'Completing Google sign-in…' : 'Checking your session…'}</main>
   }
@@ -499,10 +511,16 @@ export default function AdminApp() {
               </div>
               <section className="admin-table-card" aria-labelledby="users-heading">
                 <div className="admin-table-heading"><div><h2 id="users-heading">School accounts</h2><p>Role and account access changes are recorded in the audit trail.</p></div>{loadingUsers && <span className="admin-muted" aria-live="polite">Loading…</span>}</div>
+                <div className="admin-table-toolbar">
+                  <label className="admin-table-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg><input type="search" value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search name, email or phone" aria-label="Search school accounts" /></label>
+                  <label className="admin-table-filter"><span>Role</span><select value={userRoleFilter} onChange={(event) => setUserRoleFilter(event.target.value as 'ALL' | UserRole)} aria-label="Filter users by role"><option value="ALL">All roles</option>{roles.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+                  <label className="admin-table-filter"><span>Status</span><select value={userStatusFilter} onChange={(event) => setUserStatusFilter(event.target.value as 'ALL' | 'ACTIVE' | 'INACTIVE')} aria-label="Filter users by status"><option value="ALL">All statuses</option><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option></select></label>
+                  <span className="admin-filter-count">{visibleUsers.length} of {users.length}</span>
+                </div>
                 <div className="admin-table-scroll"><table>
                   <thead><tr><th scope="col">Name</th><th scope="col">Email / phone</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Last sign-in</th><th scope="col">Account access</th></tr></thead>
                   <tbody>
-                    {users.map((account) => {
+                    {visibleUsers.map((account) => {
                       const active = account.isActive === true || account.isActive === 1
                       return <tr key={account.id}>
                         <td data-label="Name"><strong>{account.firstName} {account.lastName}</strong></td>
@@ -513,7 +531,7 @@ export default function AdminApp() {
                         <td data-label="Account access">{active || account.role === 'ADMIN' ? <button className="admin-quiet-button" type="button" disabled={busyUserId === account.id || account.id === user?.id} onClick={() => void changeAccountStatus(account, !active)}>{active ? 'Deactivate' : 'Activate'}</button> : <span className="admin-cell-secondary">Invitation required</span>}</td>
                       </tr>
                     })}
-                    {!loadingUsers && users.length === 0 && <tr><td className="admin-empty" colSpan={6}>No user accounts found.</td></tr>}
+                    {!loadingUsers && visibleUsers.length === 0 && <tr><td className="admin-empty" colSpan={6}>{users.length === 0 ? 'No user accounts found.' : 'No accounts match these filters.'}</td></tr>}
                   </tbody>
                 </table></div>
               </section>
