@@ -20,7 +20,7 @@ interface AttendanceRow { studentId: number; admissionNumber: string; firstName:
 interface Assessment { id: number; termId: number; termName: string; academicYearId: number; academicYearName: string; classId: number; className: string; subjectId: number; subjectCode: string; subjectName: string; title: string; assessmentType: AssessmentType; maxScore: number | string; assessmentDate: string; markedCount: number }
 interface MarkRow { studentId: number; admissionNumber: string; firstName: string; lastName: string; score: number | string | null; remarks: string | null }
 interface ReportCard { studentId: number; admissionNumber: string; firstName: string; lastName: string; averageScore: number | string | null; classPosition: number | null; attendancePercentage: number | string | null; generatedAt: string | null }
-interface TimetableEntry { id: number; classId: number; className: string; streamId: number | null; streamName: string | null; subjectCode: string; subjectName: string; teacherName: string | null; dayOfWeek: number; startsAt: string; endsAt: string; room: string | null; academicYearName: string; termName: string | null }
+interface TimetableEntry { id: number; classId: number; className: string; streamId: number | null; streamName: string | null; subjectId: number; subjectCode: string; subjectName: string; teacherId: number | null; teacherName: string | null; dayOfWeek: number; startsAt: string; endsAt: string; room: string | null; academicYearId: number; academicYearName: string; termId: number | null; termName: string | null }
 interface FeeStructure { id: number; academicYearId: number; academicYearName: string; classId: number | null; className: string | null; name: string; amount: number | string; dueDate: string | null; description: string | null; assignedCount: number }
 interface FeeItem { id: number; studentId: number; admissionNumber: string; firstName: string; lastName: string; feeStructureId: number; feeName: string; academicYearName: string; amountDue: number | string; amountPaid: number | string; status: string; balance: number | string }
 interface Payment { id: number; receiptNumber: string; admissionNumber: string; firstName: string; lastName: string; amount: number | string; paymentMethod: PaymentMethod; reference: string | null; paidAt: string }
@@ -284,6 +284,7 @@ function TimetableModule({ token }: { token: string }) {
   const [form, setForm] = useState({ classId: '', streamId: '', subjectId: '', teacherId: '', dayOfWeek: '1', startsAt: '08:00', endsAt: '09:00', room: '', academicYearId: '', termId: '' })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingEntryId, setEditingEntryId] = useState<number | null>(null)
   const [removing, setRemoving] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -308,10 +309,33 @@ function TimetableModule({ token }: { token: string }) {
   async function createEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError(''); setNotice('')
     try {
-      const result = await api<ApiBase & { id: number }>('/api/admin/operations/timetable', token, { method: 'POST', body: JSON.stringify({ ...form, classId: Number(form.classId), streamId: form.streamId ? Number(form.streamId) : null, subjectId: Number(form.subjectId), teacherId: form.teacherId ? Number(form.teacherId) : null, dayOfWeek: Number(form.dayOfWeek), academicYearId: Number(form.academicYearId), termId: form.termId ? Number(form.termId) : null }) })
-      setNotice(result.message ?? 'Timetable entry created.')
+      const path = editingEntryId ? '/api/admin/operations/timetable/' + editingEntryId : '/api/admin/operations/timetable'
+      const result = await api<ApiBase & { id?: number }>(path, token, { method: editingEntryId ? 'PATCH' : 'POST', body: JSON.stringify({ ...form, classId: Number(form.classId), streamId: form.streamId ? Number(form.streamId) : null, subjectId: Number(form.subjectId), teacherId: form.teacherId ? Number(form.teacherId) : null, dayOfWeek: Number(form.dayOfWeek), academicYearId: Number(form.academicYearId), termId: form.termId ? Number(form.termId) : null }) })
+      setNotice(result.message ?? (editingEntryId ? 'Timetable entry updated.' : 'Timetable entry created.'))
+      setEditingEntryId(null)
       await load()
     } catch (reason) { setError(messageOf(reason)) } finally { setSaving(false) }
+  }
+  function editEntry(entry: TimetableEntry) {
+    setEditingEntryId(entry.id)
+    setForm({
+      classId: String(entry.classId),
+      streamId: entry.streamId === null ? '' : String(entry.streamId),
+      subjectId: String(entry.subjectId),
+      teacherId: entry.teacherId === null ? '' : String(entry.teacherId),
+      dayOfWeek: String(entry.dayOfWeek),
+      startsAt: String(entry.startsAt).slice(0, 5),
+      endsAt: String(entry.endsAt).slice(0, 5),
+      room: entry.room ?? '',
+      academicYearId: String(entry.academicYearId),
+      termId: entry.termId === null ? '' : String(entry.termId),
+    })
+    setError('')
+    setNotice('Editing timetable entry #' + entry.id)
+  }
+  function cancelEntryEdit() {
+    setEditingEntryId(null)
+    setForm({ classId: '', streamId: '', subjectId: '', teacherId: '', dayOfWeek: '1', startsAt: '08:00', endsAt: '09:00', room: '', academicYearId: options?.years.find((year) => enabled(year.isCurrent))?.id.toString() ?? '', termId: '' })
   }
   async function removeEntry(entry: TimetableEntry) {
     if (!window.confirm('Delete ' + entry.className + ' · ' + entry.subjectName + ' · ' + (weekdays.find((d) => d.id === entry.dayOfWeek)?.label ?? '') + '?')) return
@@ -324,7 +348,7 @@ function TimetableModule({ token }: { token: string }) {
     {optionsLoading && <State loading />}{optionsError && <State error={optionsError} retry={() => void reload()} />}
     {options && <>
       {error && <p className="operations-inline-error" role="alert">{error}</p>}{notice && <p className="operations-inline-success" role="status">{notice}</p>}
-      <form className="operations-form-grid" onSubmit={createEntry}><div className="operations-form-heading"><div><h4>Add timetable period</h4><p>Overlapping class, stream or teacher assignments are rejected by the backend.</p></div></div>
+      <form className="operations-form-grid" onSubmit={createEntry}><div className="operations-form-heading"><div><h4>{editingEntryId ? 'Edit timetable period' : 'Add timetable period'}</h4><p>Overlapping class, stream or teacher assignments are rejected by the backend.</p></div>{editingEntryId && <button type="button" className="operations-button secondary" onClick={cancelEntryEdit}>Cancel edit</button>}</div>
         <Field label="Academic year"><select required value={form.academicYearId} onChange={(e) => setForm({ ...form, academicYearId: e.target.value })}><option value="">Choose year</option>{options.years.map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select></Field>
         <Field label="Term (optional)"><select value={form.termId} onChange={(e) => setForm({ ...form, termId: e.target.value })}><option value="">Whole academic year</option>{options.terms.filter((t) => !form.academicYearId || String(t.academicYearId) === form.academicYearId).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
         <Field label="Class"><select required value={form.classId} onChange={(e) => setForm({ ...form, classId: e.target.value, streamId: '' })}><option value="">Choose class</option>{options.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
@@ -335,12 +359,12 @@ function TimetableModule({ token }: { token: string }) {
         <Field label="Start time"><input type="time" required value={form.startsAt} onChange={(e) => setForm({ ...form, startsAt: e.target.value })} /></Field>
         <Field label="End time"><input type="time" required value={form.endsAt} onChange={(e) => setForm({ ...form, endsAt: e.target.value })} /></Field>
         <Field label="Room / venue"><input maxLength={100} value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} /></Field>
-        <div className="operations-form-actions"><button className="operations-button primary" disabled={saving}>{saving ? 'Saving…' : 'Add timetable period'}</button></div>
+        <div className="operations-form-actions"><button className="operations-button primary" disabled={saving}>{saving ? 'Saving…' : editingEntryId ? 'Save timetable changes' : 'Add timetable period'}</button></div>
       </form>
       <section className="operations-section"><div className="operations-section-heading"><div><h4>Timetable entries</h4><p>Real periods persisted in MySQL.</p></div><button className="operations-button secondary" type="button" disabled={loading} onClick={() => void load()}>Refresh</button></div>
         <div className="operations-filters compact"><Field label="Year"><select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}><option value="">All years</option>{options.years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}</select></Field><Field label="Class"><select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}><option value="">All classes</option>{options.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="Term"><select value={termFilter} onChange={(e) => setTermFilter(e.target.value)}><option value="">All terms</option>{options.terms.map((t) => <option key={t.id} value={t.id}>{t.academicYearName} · {t.name}</option>)}</select></Field></div>
         <State loading={loading} error={!loading ? error : ''} empty={!loading && !error && !entries.length ? 'No timetable entries match these filters.' : undefined} retry={() => void load()} />
-        {!loading && entries.length > 0 && <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Day / time</th><th>Class</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Action</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td><strong>{weekdays.find((d) => d.id === entry.dayOfWeek)?.label ?? 'Day unavailable'}</strong><small>{String(entry.startsAt).slice(0, 5)}–{String(entry.endsAt).slice(0, 5)}</small></td><td>{entry.className}{entry.streamName && <small>{entry.streamName}</small>}<small>{entry.academicYearName}{entry.termName ? ' · ' + entry.termName : ''}</small></td><td><strong>{entry.subjectName}</strong><small>{entry.subjectCode}</small></td><td>{entry.teacherName ?? 'Unassigned'}</td><td>{entry.room ?? '—'}</td><td><button type="button" className="operations-button danger tiny" disabled={removing === entry.id} onClick={() => void removeEntry(entry)}>{removing === entry.id ? 'Removing…' : 'Delete'}</button></td></tr>)}</tbody></table></div>}
+        {!loading && entries.length > 0 && <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Day / time</th><th>Class</th><th>Subject</th><th>Teacher</th><th>Room</th><th>Action</th></tr></thead><tbody>{entries.map((entry) => <tr key={entry.id}><td><strong>{weekdays.find((d) => d.id === entry.dayOfWeek)?.label ?? 'Day unavailable'}</strong><small>{String(entry.startsAt).slice(0, 5)}–{String(entry.endsAt).slice(0, 5)}</small></td><td>{entry.className}{entry.streamName && <small>{entry.streamName}</small>}<small>{entry.academicYearName}{entry.termName ? ' · ' + entry.termName : ''}</small></td><td><strong>{entry.subjectName}</strong><small>{entry.subjectCode}</small></td><td>{entry.teacherName ?? 'Unassigned'}</td><td>{entry.room ?? '—'}</td><td><div className="operations-row-actions"><button type="button" className="operations-button tiny" onClick={() => editEntry(entry)}>Edit</button><button type="button" className="operations-button danger tiny" disabled={removing === entry.id} onClick={() => void removeEntry(entry)}>{removing === entry.id ? 'Removing…' : 'Delete'}</button></div></td></tr>)}</tbody></table></div>}
       </section>
     </>}
   </div>
@@ -357,6 +381,8 @@ function FinanceModule({ token }: { token: string }) {
   const [view, setView] = useState<'structures' | 'balances' | 'payments'>('structures')
   const [structureForm, setStructureForm] = useState({ academicYearId: '', classId: '', name: '', amount: '', dueDate: '', description: '' })
   const [structureId, setStructureId] = useState('')
+  const [editingStructureId, setEditingStructureId] = useState<number | null>(null)
+  const [deletingStructureId, setDeletingStructureId] = useState<number | null>(null)
   const [studentIds, setStudentIds] = useState<number[]>([])
   const [paymentForm, setPaymentForm] = useState({ studentId: '', amount: '', paymentMethod: 'CASH' as PaymentMethod, reference: '' })
   const [loading, setLoading] = useState(true)
@@ -390,11 +416,40 @@ function FinanceModule({ token }: { token: string }) {
   async function createStructure(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setError(''); setNotice('')
     try {
-      const result = await api<ApiBase>('/api/admin/operations/fees/structures', token, { method: 'POST', body: JSON.stringify({ ...structureForm, academicYearId: Number(structureForm.academicYearId), classId: structureForm.classId ? Number(structureForm.classId) : null, amount: Number(structureForm.amount), dueDate: structureForm.dueDate || null }) })
-      setNotice(result.message ?? 'Fee structure created.')
+      const path = editingStructureId ? '/api/admin/operations/fees/structures/' + editingStructureId : '/api/admin/operations/fees/structures'
+      const result = await api<ApiBase>(path, token, { method: editingStructureId ? 'PATCH' : 'POST', body: JSON.stringify({ ...structureForm, academicYearId: Number(structureForm.academicYearId), classId: structureForm.classId ? Number(structureForm.classId) : null, amount: Number(structureForm.amount), dueDate: structureForm.dueDate || null }) })
+      setNotice(result.message ?? (editingStructureId ? 'Fee structure updated.' : 'Fee structure created.'))
+      setEditingStructureId(null)
       setStructureForm((old) => ({ ...old, name: '', amount: '', dueDate: '', description: '' }))
       await load()
     } catch (reason) { setError(messageOf(reason)) } finally { setSaving(false) }
+  }
+  function editStructure(structure: FeeStructure) {
+    setEditingStructureId(structure.id)
+    setStructureForm({
+      academicYearId: String(structure.academicYearId),
+      classId: structure.classId === null ? '' : String(structure.classId),
+      name: structure.name,
+      amount: String(structure.amount),
+      dueDate: structure.dueDate ?? '',
+      description: structure.description ?? '',
+    })
+    setError('')
+    setNotice('Editing fee structure: ' + structure.name)
+  }
+  function cancelStructureEdit() {
+    setEditingStructureId(null)
+    const year = options?.years.find((item) => enabled(item.isCurrent)) ?? options?.years[0]
+    setStructureForm({ academicYearId: String(year?.id ?? ''), classId: '', name: '', amount: '', dueDate: '', description: '' })
+  }
+  async function deleteStructure(structure: FeeStructure) {
+    if (!window.confirm('Delete fee structure "' + structure.name + '"? Structures with assigned balances cannot be deleted.')) return
+    setDeletingStructureId(structure.id); setError(''); setNotice('')
+    try {
+      const result = await api<ApiBase>('/api/admin/operations/fees/structures/' + structure.id, token, { method: 'DELETE' })
+      setNotice(result.message ?? 'Fee structure deleted.')
+      await load()
+    } catch (reason) { setError(messageOf(reason)) } finally { setDeletingStructureId(null) }
   }
   async function assignFees(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -423,18 +478,18 @@ function FinanceModule({ token }: { token: string }) {
       <section className="operations-finance-metrics"><div><span>Total assigned</span><strong>{fmtAmount(summary.totalDue)}</strong><small>{fmtNumber(summary.itemCount)} assigned items</small></div><div><span>Payments recorded</span><strong>{fmtAmount(summary.totalPaid)}</strong><small>{fmtNumber(paymentSummary.paymentCount)} receipts</small></div><div><span>Outstanding</span><strong>{fmtAmount(summary.outstanding)}</strong><small>{remaining.length} items with a balance</small></div></section>
       <div className="operations-view-switch"><button type="button" className={view === 'structures' ? 'is-active' : ''} onClick={() => setView('structures')}>Fee structures</button><button type="button" className={view === 'balances' ? 'is-active' : ''} onClick={() => setView('balances')}>Student balances</button><button type="button" className={view === 'payments' ? 'is-active' : ''} onClick={() => setView('payments')}>Payment receipts</button></div>
       {view === 'structures' && <>
-        <form className="operations-form-grid" onSubmit={createStructure}><div className="operations-form-heading"><div><h4>Create fee structure</h4><p>Creation defines a fee. It only creates student balances after assignment.</p></div></div>
+        <form className="operations-form-grid" onSubmit={createStructure}><div className="operations-form-heading"><div><h4>{editingStructureId ? 'Edit fee structure' : 'Create fee structure'}</h4><p>Creation defines a fee. It only creates student balances after assignment.</p></div>{editingStructureId && <button type="button" className="operations-button secondary" onClick={cancelStructureEdit}>Cancel edit</button>}</div>
           <Field label="Academic year"><select required value={structureForm.academicYearId} onChange={(e) => setStructureForm({ ...structureForm, academicYearId: e.target.value })}><option value="">Choose year</option>{options.years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}</select></Field>
           <Field label="Class (optional)"><select value={structureForm.classId} onChange={(e) => setStructureForm({ ...structureForm, classId: e.target.value })}><option value="">All classes</option>{options.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="Fee name"><input required maxLength={150} value={structureForm.name} onChange={(e) => setStructureForm({ ...structureForm, name: e.target.value })} /></Field>
           <Field label="Amount (RWF)"><input required type="number" min="0.01" step="0.01" value={structureForm.amount} onChange={(e) => setStructureForm({ ...structureForm, amount: e.target.value })} /></Field>
           <Field label="Due date (optional)"><input type="date" value={structureForm.dueDate} onChange={(e) => setStructureForm({ ...structureForm, dueDate: e.target.value })} /></Field>
           <Field label="Description"><input maxLength={255} value={structureForm.description} onChange={(e) => setStructureForm({ ...structureForm, description: e.target.value })} /></Field>
-          <div className="operations-form-actions"><button className="operations-button primary" disabled={saving}>{saving ? 'Saving…' : 'Create structure'}</button></div>
+          <div className="operations-form-actions"><button className="operations-button primary" disabled={saving}>{saving ? 'Saving…' : editingStructureId ? 'Save fee changes' : 'Create structure'}</button></div>
         </form>
         <section className="operations-section"><div className="operations-section-heading"><div><h4>Fee structures</h4><p>Existing database records. Balances appear after assignment.</p></div><button type="button" className="operations-button secondary" disabled={loading} onClick={() => void load()}>Refresh</button></div>
           <State loading={loading} empty={!loading && structures.length === 0 ? 'No fee structures exist yet.' : undefined} retry={() => void load()} />
-          {!loading && structures.length > 0 && <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Fee</th><th>Academic year / class</th><th>Amount</th><th>Due date</th><th>Assigned</th></tr></thead><tbody>{structures.map((s) => <tr key={s.id}><td><strong>{s.name}</strong>{s.description && <small>{s.description}</small>}</td><td>{s.academicYearName}<small>{s.className ?? 'All classes'}</small></td><td>{fmtAmount(s.amount)}</td><td>{shortDate(s.dueDate)}</td><td>{s.assignedCount}</td></tr>)}</tbody></table></div>}
+          {!loading && structures.length > 0 && <div className="operations-table-wrap"><table className="operations-table"><thead><tr><th>Fee</th><th>Academic year / class</th><th>Amount</th><th>Due date</th><th>Assigned</th><th>Actions</th></tr></thead><tbody>{structures.map((s) => <tr key={s.id}><td><strong>{s.name}</strong>{s.description && <small>{s.description}</small>}</td><td>{s.academicYearName}<small>{s.className ?? 'All classes'}</small></td><td>{fmtAmount(s.amount)}</td><td>{shortDate(s.dueDate)}</td><td>{s.assignedCount}</td><td><div className="operations-row-actions"><button type="button" className="operations-button tiny" onClick={() => editStructure(s)}>Edit</button><button type="button" className="operations-button danger tiny" disabled={deletingStructureId === s.id} onClick={() => void deleteStructure(s)}>{deletingStructureId === s.id ? 'Deleting…' : 'Delete'}</button></div></td></tr>)}</tbody></table></div>}
         </section>
         <form className="operations-form-grid operations-assign-form" onSubmit={assignFees}><div className="operations-form-heading"><div><h4>Assign fee to students</h4><p>Existing fee assignments are skipped rather than duplicated.</p></div></div>
           <Field label="Fee structure"><select required value={structureId} onChange={(e) => setStructureId(e.target.value)}><option value="">Choose fee structure</option>{structures.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.academicYearName} · {fmtAmount(s.amount)}</option>)}</select></Field>
