@@ -23,6 +23,10 @@ export class StorageServiceError extends Error {
   }
 }
 
+export function isMediaStorageConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL?.trim() && process.env.SUPABASE_SERVICE_ROLE_KEY?.trim())
+}
+
 function config() {
   const baseUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, '')
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
