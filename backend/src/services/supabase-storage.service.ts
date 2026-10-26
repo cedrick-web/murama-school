@@ -34,9 +34,15 @@ function objectPathUrl(path: string): string {
   return path.split('/').map((segment) => encodeURIComponent(segment)).join('/')
 }
 
-export function publicMediaUrl(path: string): string {
-  const { baseUrl } = config()
-  return baseUrl + '/storage/v1/object/public/' + BUCKET + '/' + objectPathUrl(path)
+function signedUrlFromResponse(baseUrl: string, body: Record<string, unknown> | null): string {
+  const value = body?.signedURL ?? body?.signedUrl ?? body?.url
+  if (typeof value !== 'string' || !value) {
+    throw new StorageServiceError('Supabase Storage did not return a signed URL')
+  }
+  if (/^https:\/\//i.test(value)) return value
+  if (value.startsWith('/storage/v1/')) return baseUrl + value
+  if (value.startsWith('/')) return baseUrl + '/storage/v1' + value
+  return baseUrl + '/storage/v1/' + value
 }
 
 /** Issue a short-lived upload token. The service-role key never leaves the server. */
@@ -64,11 +70,36 @@ export async function createSignedMediaUpload(path: string): Promise<string> {
   return body.token
 }
 
-/** Confirm that the signed upload actually exists and matches the expected content type and size. */
+/** Create a short-lived read URL only for records the API has decided the caller may see. */
+export async function createSignedMediaReadUrl(path: string, expiresIn = 3600): Promise<string> {
+  const { baseUrl, serviceKey } = config()
+  const response = await fetch(
+    baseUrl + '/storage/v1/object/sign/' + BUCKET + '/' + objectPathUrl(path),
+    {
+      method: 'POST',
+      headers: {
+        apikey: serviceKey,
+        Authorization: 'Bearer ' + serviceKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn }),
+    },
+  )
+  const body = await response.json().catch(() => null) as Record<string, unknown> | null
+  if (!response.ok) {
+    throw new StorageServiceError(
+      typeof body?.message === 'string' ? body.message : 'Supabase Storage could not create a read URL',
+      response.status,
+    )
+  }
+  return signedUrlFromResponse(baseUrl, body)
+}
+
+/** Confirm the private uploaded object exists and matches the declared MIME type and byte count. */
 export async function verifyUploadedMedia(path: string, expectedMimeType: string, expectedSize: number): Promise<boolean> {
   const { baseUrl, serviceKey } = config()
   const response = await fetch(
-    baseUrl + '/storage/v1/object/info/public/' + BUCKET + '/' + objectPathUrl(path),
+    baseUrl + '/storage/v1/object/info/' + BUCKET + '/' + objectPathUrl(path),
     {
       method: 'GET',
       headers: {
@@ -83,8 +114,11 @@ export async function verifyUploadedMedia(path: string, expectedMimeType: string
   }
   const body = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!body) return false
-  const actualSize = Number(body.size ?? (body.metadata && (body.metadata as Record<string, unknown>).size))
-  const actualMime = String(body.mimetype ?? body.contentType ?? (body.metadata && (body.metadata as Record<string, unknown>).mimetype) ?? '').toLowerCase()
+  const metadata = body.metadata && typeof body.metadata === 'object'
+    ? body.metadata as Record<string, unknown>
+    : {}
+  const actualSize = Number(body.size ?? metadata.size)
+  const actualMime = String(body.mimetype ?? body.contentType ?? metadata.mimetype ?? metadata.contentType ?? '').toLowerCase()
   return Number.isFinite(actualSize)
     && actualSize === expectedSize
     && actualMime === expectedMimeType.toLowerCase()
