@@ -181,8 +181,8 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
       const target = (userRows as Record<string, unknown>[])[0]
       if (!target) return { ok: false as const, status: 404, message: 'No school account exists for this email' }
       if (Boolean(target.isActive)) return { ok: false as const, status: 409, message: 'This school account is already active' }
-      if (!['STUDENT', 'PARENT'].includes(String(target.role))) {
-        return { ok: false as const, status: 409, message: 'Invitations currently support existing student and parent accounts only' }
+      if (!['STUDENT', 'PARENT', 'TEACHER'].includes(String(target.role))) {
+        return { ok: false as const, status: 409, message: 'Invitations currently support existing student, parent and teacher accounts only' }
       }
 
       let linkedStudentId: number | null = null
@@ -198,7 +198,7 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
         if (!(studentRows as Record<string, unknown>[]).length) {
           return { ok: false as const, status: 409, message: 'The student account is not linked to a student record' }
         }
-      } else {
+      } else if (target.role === 'PARENT') {
         if (!studentId || relationship.length < 2) {
           return { ok: false as const, status: 400, message: 'Parent invitations require a linked student ID and relationship' }
         }
@@ -218,6 +218,17 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
         }
         linkedStudentId = studentId
         parentRelationship = relationship
+      } else {
+        if (studentId !== null || relationship) {
+          return { ok: false as const, status: 400, message: 'Teacher invitations do not accept parent-link fields' }
+        }
+        const [teacherRows] = await connection.execute(
+          'SELECT id FROM teachers WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(teacherRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The teacher account is not linked to a teacher record' }
+        }
       }
 
       await connection.execute(
