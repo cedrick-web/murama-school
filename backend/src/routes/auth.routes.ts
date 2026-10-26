@@ -3,7 +3,7 @@ import { Router } from 'express'
 import { getUserById, login, loginWithVerifiedEmail } from '../services/auth.service.js'
 import { isDatabaseUnavailable } from '../config/database.js'
 import { SupabaseAuthConfigurationError, verifyGoogleAccessToken } from '../services/supabase-auth.service.js'
-import { createRateLimiter } from '../middleware/rate-limit.js'
+import { createDatabaseRateLimiter } from '../middleware/rate-limit.js'
 import {
   requireAuth,
   signAccessToken,
@@ -12,7 +12,7 @@ import {
 
 const router = Router()
 
-router.post('/login', createRateLimiter(15 * 60 * 1000, 10), async (req, res) => {
+router.post('/login', createDatabaseRateLimiter(15 * 60 * 1000, 10, 'password-login'), async (req, res) => {
   const email = typeof req.body?.email === 'string'
     ? req.body.email.trim().toLowerCase()
     : ''
@@ -53,7 +53,7 @@ router.post('/login', createRateLimiter(15 * 60 * 1000, 10), async (req, res) =>
   }
 })
 
-router.post('/google', createRateLimiter(15 * 60 * 1000, 10), async (req, res) => {
+router.post('/google', createDatabaseRateLimiter(15 * 60 * 1000, 10, 'google-sign-in'), async (req, res) => {
   const accessToken = typeof req.body?.accessToken === 'string' ? req.body.accessToken.trim() : ''
   if (accessToken.length < 20 || accessToken.length > 8192) {
     res.status(400).json({ success: false, message: 'A valid Supabase access token is required' })
