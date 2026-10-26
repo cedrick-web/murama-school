@@ -152,6 +152,11 @@ The workflow uses a short-lived Supabase Storage signed-upload token so the brow
 
 Before enabling media uploads, apply `supabase/migrations/20261026170134_school_media_gallery.sql` to the target Supabase project. The migration creates the `school-media` bucket and the media metadata table, configures allowed MIME types and a 25 MB object limit, enables RLS, and revokes direct browser-role access to metadata. Set `SUPABASE_SERVICE_ROLE_KEY` in the backend and `VITE_SUPABASE_URL` plus `VITE_SUPABASE_PUBLISHABLE_KEY` in the frontend. The storage bucket remains private. The public API creates expiring signed read URLs only for records in the `PUBLISHED` state; unpublished files are never exposed through the public gallery API.
 
+
+## Supabase security and invitation indexes
+
+The migration `supabase/migrations/20261026170532_profiles_policy_and_invitation_indexes.sql` restricts optional Google identity profiles to their own permanent Supabase Auth identity, explicitly excluding anonymous Auth sessions, and adds indexes for the invitation creator and linked-student foreign keys. School records remain server-accessed through the Express API; direct `anon` and `authenticated` table grants remain revoked for the school-management tables.
+
 ## Live data readiness
 
 The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.
