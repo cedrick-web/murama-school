@@ -167,6 +167,26 @@ The backend includes an opt-in smoke test for a deployed API. It checks readines
 
 From the `backend` directory, set `SMOKE_BASE_URL`, `SMOKE_STUDENT_EMAIL`, `SMOKE_STUDENT_PASSWORD`, `SMOKE_PARENT_EMAIL`, and `SMOKE_PARENT_PASSWORD` in your local shell or CI secret store. To test denial for an unrelated student, also set `SMOKE_UNLINKED_STUDENT_ID` to a valid student ID not linked to the test parent. Then run `npm run smoke:e2e`. The script never prints passwords or access tokens and is not part of default CI because it requires authorized accounts and a deployed target. To additionally exercise invitation creation, validation and revocation, set `SMOKE_ADMIN_EMAIL`, `SMOKE_ADMIN_PASSWORD`, and `SMOKE_INACTIVE_STUDENT_EMAIL` for a dedicated active admin plus an existing inactive student test account. This optional flow revokes its test invitation and does not activate the account.
 
+
+## Production environment configuration checklist
+
+The Netlify site needs runtime/build variables before authentication, the API database, and media storage can be considered live-ready. Configure these in **Netlify → Site configuration → Environment variables**. Do not commit actual secrets.
+
+| Variable | Scope | Purpose |
+| --- | --- | --- |
+| `SUPABASE_DB_URL` | Functions/runtime, secret | Supabase PostgreSQL transaction-pooler connection URI (port 6543, SSL required) |
+| `SUPABASE_URL` | Functions/runtime | `https://ilmvmqxmasgasrtokjmz.supabase.co` |
+| `SUPABASE_PUBLISHABLE_KEY` | Functions/runtime | Project publishable key used to validate Supabase Auth identities |
+| `SUPABASE_SERVICE_ROLE_KEY` | Functions/runtime, secret | Server-only signed media uploads, verification, reads and deletes |
+| `JWT_SECRET` | Functions/runtime, secret | Cryptographically random secret of at least 32 characters |
+| `FRONTEND_URL` | Functions/runtime | `https://murama-school.netlify.app` |
+| `VITE_SUPABASE_URL` | Build | Supabase project URL for browser Google sign-in |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Build | Project publishable key for browser Google sign-in |
+
+Leave `VITE_API_URL` empty for the current same-origin Netlify API rewrite. Never set a service-role key, database URI, or JWT signing secret under a `VITE_` variable. Configure Google as an Auth provider in Supabase and allow the production callback URLs before testing OAuth.
+
+After setting variables, trigger a new deploy and call `/api/health/ready`. Then run `npm run smoke:e2e` from `backend` with dedicated student/parent test accounts; optionally configure the admin/inactive-student variables to test invitation creation, validation and revocation. The readiness endpoint and automated checks cannot supply missing credentials or prove that Google OAuth is configured in the Supabase dashboard.
+
 ## Production readiness probe
 
 Use `GET /api/health/ready` as the deployment readiness check. It returns HTTP 200 only when the database is reachable, `JWT_SECRET` meets the minimum length, and server-side Supabase media storage is configured. A degraded response identifies component names only and never returns secret values. Keep the existing `/api/health` and `/api/health/database` endpoints for existing diagnostics. Before production rollout, run this probe against the actual Netlify runtime and verify image/video upload, publish, read and delete with a dedicated test account.
