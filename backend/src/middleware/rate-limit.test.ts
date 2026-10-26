@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createRateLimiter } from './rate-limit.js'
+import { createDatabaseRateLimiter, createRateLimiter } from './rate-limit.js'
 
 function makeRequest(ip = '192.0.2.10') {
   return { ip, socket: { remoteAddress: ip } }
@@ -64,4 +64,54 @@ test('rate limiter tracks clients independently', () => {
 
   assert.equal(first.statusCode, 200)
   assert.equal(second.statusCode, 200)
+})
+test('shared-store limiter hashes scoped client keys and blocks excess requests', async () => {
+  const buckets = new Map<string, { count: number; resetAt: number }>()
+  const keys: string[] = []
+  const increment = async (key: string, windowMs: number) => {
+    keys.push(key)
+    const now = Date.now()
+    const current = buckets.get(key)
+    const entry = !current || current.resetAt <= now
+      ? { count: 1, resetAt: now + windowMs }
+      : { count: current.count + 1, resetAt: current.resetAt }
+    buckets.set(key, entry)
+    return entry
+  }
+  const limit = createDatabaseRateLimiter(60_000, 1, 'password-login', increment)
+  const invoke = async () => {
+    const response = makeResponse()
+    let nextCalls = 0
+    limit(makeRequest() as never, response.response as never, (() => { nextCalls += 1 }) as never)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    return { response, nextCalls }
+  }
+
+  const first = await invoke()
+  const second = await invoke()
+  assert.equal(first.response.statusCode, 200)
+  assert.equal(first.nextCalls, 1)
+  assert.equal(second.response.statusCode, 429)
+  assert.equal(second.nextCalls, 0)
+  assert.equal(keys.length, 2)
+  assert.notEqual(keys[0], '192.0.2.10')
+  assert.equal(keys[0].length, 64)
+})
+
+test('shared-store limiter fails closed when the shared store is unavailable', async () => {
+  const limit = createDatabaseRateLimiter(60_000, 10, 'test', async () => {
+    throw new Error('store unavailable')
+  })
+  const response = makeResponse()
+  let nextCalls = 0
+  const originalError = console.error
+  console.error = () => {}
+  try {
+    limit(makeRequest() as never, response.response as never, (() => { nextCalls += 1 }) as never)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  } finally {
+    console.error = originalError
+  }
+  assert.equal(response.statusCode, 503)
+  assert.equal(nextCalls, 0)
 })
