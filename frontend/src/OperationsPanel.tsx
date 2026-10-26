@@ -32,7 +32,8 @@ interface FeeStructure { id: number; academicYearId: number; academicYearName: s
 interface FeeItem { id: number; studentId: number; admissionNumber: string; firstName: string; lastName: string; feeStructureId: number; feeName: string; academicYearName: string; amountDue: number | string; amountPaid: number | string; status: string; balance: number | string }
 interface Payment { id: number; receiptNumber: string; admissionNumber: string; firstName: string; lastName: string; amount: number | string; paymentMethod: PaymentMethod; reference: string | null; paidAt: string }
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
-interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }\ninterface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
+interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
+interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -110,7 +111,8 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'gradebook', title: 'Gradebook', sub: 'Assessments & reports', number: '02' },
     { id: 'timetable', title: 'Timetable', sub: 'Periods & teacher slots', number: '03' },
     { id: 'finance', title: 'Fees & payments', sub: 'Balances & receipts', number: '04' },
-    { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },\n    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },
+    { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
+    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },
   ]
   return <div className="operations-workspace">
     <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
