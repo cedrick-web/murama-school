@@ -16,6 +16,8 @@ import teacherRoutes from './routes/teacher.routes.js'
 dotenv.config()
 
 const app = express()
+// Netlify injects the client IP through its trusted proxy; local/direct requests are not trusted proxies.
+app.set('trust proxy', process.env.NETLIFY ? 1 : false)
 
 app.use(helmet())
 app.use(cors({ origin: process.env.FRONTEND_URL ?? 'http://localhost:5173' }))
