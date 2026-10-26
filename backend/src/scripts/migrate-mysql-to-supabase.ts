@@ -136,7 +136,7 @@ async function main(): Promise<void> {
       const sourceCount = Number((sourceCountRows as Array<Record<string, unknown>>)[0]?.rowCount ?? 0)
       const [sourceColumnRows] = await source.query('SHOW COLUMNS FROM ' + sourceTable)
       const sourceColumns = new Set((sourceColumnRows as Array<Record<string, unknown>>).map((column) => String(column.Field)))
-      const [targetColumnRows] = await destination.unsafe(
+      const targetColumnRows = await destination.unsafe(
         'SELECT column_name, is_nullable, column_default, is_identity, is_generated FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2',
         ['public', table],
       )
@@ -160,7 +160,7 @@ async function main(): Promise<void> {
         throw new Error(table + ': required target columns are missing from the MySQL source: ' + missingRequiredColumns.join(', ') + '. Review a schema mapping before importing.')
       }
 
-      const [targetCountRows] = await destination.unsafe(
+      const targetCountRows = await destination.unsafe(
         'SELECT COUNT(*) AS row_count FROM public.' + quoteIdentifier(table),
       )
       const targetCountBefore = Number((targetCountRows as Array<Record<string, unknown>>)[0]?.row_count ?? 0)
@@ -210,7 +210,7 @@ async function main(): Promise<void> {
       })
 
       totalRows += copied
-      const [targetAfterRows] = await destination.unsafe(
+      const targetAfterRows = await destination.unsafe(
         'SELECT COUNT(*) AS row_count FROM public.' + quoteIdentifier(table),
       )
       const targetCountAfter = Number((targetAfterRows as Array<Record<string, unknown>>)[0]?.row_count ?? 0)
