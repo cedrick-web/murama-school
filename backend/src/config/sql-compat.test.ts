@@ -72,6 +72,19 @@ test('returns generated IDs for secure account invitations', () => {
   assert.equal(query.returnsId, true)
 })
 
+test('returns generated IDs for parent, teacher, and teacher assignment inserts', () => {
+  const cases = [
+    ['INSERT INTO parents (user_id, occupation) VALUES (?, ?)', 'INSERT INTO parents (user_id, occupation) VALUES ($1, $2) RETURNING id'],
+    ['INSERT INTO teachers (user_id, department) VALUES (?, ?)', 'INSERT INTO teachers (user_id, department) VALUES ($1, $2) RETURNING id'],
+    ['INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES (?, ?, ?, ?)', 'INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES ($1, $2, $3, $4) RETURNING id'],
+  ] as const
+  for (const [input, expected] of cases) {
+    const translated = translateMysqlQuery(input, [1, 2, 3, 4])
+    assert.equal(translated.text, expected)
+    assert.equal(translated.returnsId, true)
+  }
+})
+
 test('quotes camelCase aliases when they are referenced by ORDER BY', () => {
   const query = translateMysqlQuery(
     'SELECT AVG(score) AS averageScore, COUNT(*) AS markedCount FROM assessment_results ORDER BY averageScore DESC NULLS LAST',
