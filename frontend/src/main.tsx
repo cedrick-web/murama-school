@@ -347,6 +347,7 @@ function App() {
             {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{missingSchoolDetail}</span>}
             <a className="contact-admin-link" href="/admin">{t.openPortal}<ArrowIcon /></a>
             <a className="contact-admin-link" href="/portal">{language === 'en' ? 'Student & parent portal' : 'Urubuga rw’abanyeshuri n’ababyeyi'}<ArrowIcon /></a>
+            <a className="contact-admin-link" href="/teacher">{language === 'en' ? 'Teacher workspace' : 'Urubuga rw’abarimu'}<ArrowIcon /></a>
             <small>{t.portalCaption}</small>
           </div>
         </section>
