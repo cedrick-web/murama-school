@@ -143,6 +143,15 @@ The administrator workspace exposes the queue at **Administration → School ope
 
 Before enabling this workflow on a database, apply `supabase/migrations/20261026180000_school_visit_requests.sql` through the reviewed Supabase migration workflow. The table has RLS enabled and direct browser-role access revoked; application access is through the server-side API. Automated email or SMS delivery is not yet configured, so administrators must contact visitors using the details they submitted.
 
+
+## School photo and video gallery
+
+The public site displays only media items in the `PUBLISHED` state. Administrators can upload JPEG, PNG, WebP, AVIF, MP4 and WebM files up to 25 MB, add accessible alt text and descriptions, review the upload, publish it, archive it, or delete it. Public pages never read unpublished metadata from the database.
+
+The workflow uses a short-lived Supabase Storage signed-upload token so the browser uploads directly to Storage instead of sending large video files through a Netlify Function. The Supabase service-role key is required only by the server to create signed upload tokens, verify uploaded objects, and delete stored objects. Keep it in the backend/Netlify Function environment only; never expose it in a `VITE_` variable or commit its real value.
+
+Before enabling media uploads, apply `supabase/migrations/20261026190000_school_media_gallery.sql` to the target Supabase project. The migration creates the `school-media` bucket and the media metadata table, configures allowed MIME types and a 25 MB object limit, enables RLS, and revokes direct browser-role access to metadata. Set `SUPABASE_SERVICE_ROLE_KEY` in the backend and `VITE_SUPABASE_URL` plus `VITE_SUPABASE_PUBLISHABLE_KEY` in the frontend. The storage bucket remains private. The public API creates expiring signed read URLs only for records in the `PUBLISHED` state; unpublished files are never exposed through the public gallery API.
+
 ## Live data readiness
 
 The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.

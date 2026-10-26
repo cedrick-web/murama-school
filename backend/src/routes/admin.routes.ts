@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
@@ -9,6 +9,8 @@ import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
+import { createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, storedMediaObjectExists, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { validateMediaUpload } from '../services/media-upload-policy.js'
 
 const router = Router()
 const validRoles: UserRole[] = [
@@ -679,6 +681,212 @@ router.delete('/announcements/:announcementId', async (req: AuthenticatedRequest
   }
 })
 
+
+
+function mediaExtension(mimeType: string): string {
+  const extensions: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/avif': '.avif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+  }
+  return extensions[mimeType] ?? ''
+}
+
+router.get('/media', async (req: AuthenticatedRequest, res) => {
+  const status = req.query.status === undefined ? null : String(req.query.status).trim().toUpperCase()
+  if (status !== null && !['UPLOADING', 'READY', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Invalid media status filter' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, uploaded_by AS uploadedBy, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
+      [status, status],
+    )
+    const media = await Promise.all((rows as Record<string, unknown>[]).map(async (item) => ({
+      ...item,
+      publicUrl: item.status === 'UPLOADING' ? null : await createSignedMediaReadUrl(String(item.objectPath)),
+      canComplete: Number(item.uploadedBy) === req.user!.id,
+    })))
+    res.json({ success: true, media })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError) {
+      res.status(503).json({ success: false, message: 'School media storage is not configured on the server yet.' })
+      return
+    }
+    if (error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to create secure preview URLs for school media.' })
+      return
+    }
+    fail(res, 'load school media', error)
+  }
+})
+
+router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
+  const media = validateMediaUpload(req.body ?? {})
+  if (!media) {
+    res.status(400).json({
+      success: false,
+      message: 'Provide a title, image alt text when applicable, valid media category, allowed image/video type, and file size up to 25 MB.',
+    })
+    return
+  }
+
+  const { title, altText, description, category, mimeType, sizeBytes, mediaType } = media
+  const objectPath = randomUUID() + mediaExtension(mimeType)
+  let mediaId: number | null = null
+  try {
+    const [insertResult] = await pool.execute(
+      'INSERT INTO school_media_items (title, alt_text, description, category, media_type, object_path, mime_type, size_bytes, status, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, altText, description, category, mediaType, objectPath, mimeType, sizeBytes, 'UPLOADING', req.user!.id],
+    )
+    mediaId = Number((insertResult as { insertId: number }).insertId)
+    const uploadToken = await createSignedMediaUpload(objectPath)
+    res.status(201).json({
+      success: true,
+      upload: {
+        mediaId,
+        objectPath,
+        uploadToken,
+        mediaType,
+        expiresInSeconds: 7200,
+      },
+      message: 'Upload token created. Complete the upload to save the media item for review.',
+    })
+  } catch (error) {
+    if (mediaId !== null) {
+      try { await pool.execute('DELETE FROM school_media_items WHERE id = ? AND status = ?', [mediaId, 'UPLOADING']) }
+      catch (cleanupError) { console.error('Unable to clean up incomplete media upload record', cleanupError) }
+    }
+    if (error instanceof StorageConfigurationError) {
+      res.status(503).json({ success: false, message: 'School media storage is not configured on the server yet.' })
+      return
+    }
+    if (error instanceof StorageServiceError) {
+      console.error('Unable to create signed media upload', error)
+      res.status(502).json({ success: false, message: 'Unable to prepare the media upload with Supabase Storage.' })
+      return
+    }
+    fail(res, 'prepare media upload', error)
+  }
+})
+
+router.post('/media/:mediaId/complete', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  if (!mediaId) {
+    res.status(400).json({ success: false, message: 'A valid media ID is required' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, uploaded_by AS uploadedBy FROM school_media_items WHERE id = ? LIMIT 1',
+      [mediaId],
+    )
+    const media = (rows as Record<string, unknown>[])[0]
+    if (!media || Number(media.uploadedBy) !== req.user!.id) {
+      res.status(404).json({ success: false, message: 'Media upload not found' })
+      return
+    }
+    if (media.status !== 'UPLOADING') {
+      res.status(409).json({ success: false, message: 'This media upload has already been completed or is no longer uploadable' })
+      return
+    }
+    const verified = await verifyUploadedMedia(String(media.objectPath), String(media.mimeType), Number(media.sizeBytes))
+    if (!verified) {
+      res.status(409).json({ success: false, message: 'The uploaded file could not be verified. Check that the upload finished and retry.' })
+      return
+    }
+
+    await withTransaction(async (connection) => {
+      await connection.execute(
+        'UPDATE school_media_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ? AND uploaded_by = ?',
+        ['READY', mediaId, 'UPLOADING', req.user!.id],
+      )
+      await writeAuditLog(connection, req, 'SCHOOL_MEDIA_UPLOADED', 'school_media_item', mediaId, {
+        mimeType: String(media.mimeType),
+        sizeBytes: Number(media.sizeBytes),
+      })
+    })
+    res.json({ success: true, message: 'Media upload verified and saved for administrator review' })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError || error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to verify the media upload with Supabase Storage.' })
+      return
+    }
+    fail(res, 'complete media upload', error)
+  }
+})
+
+router.patch('/media/:mediaId/status', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  const status = typeof req.body?.status === 'string' ? req.body.status.trim().toUpperCase() : ''
+  if (!mediaId || !['READY', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Provide a valid media ID and status' })
+    return
+  }
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, title, status FROM school_media_items WHERE id = ? FOR UPDATE',
+        [mediaId],
+      )
+      const media = (rows as Record<string, unknown>[])[0]
+      if (!media) return { statusCode: 404, message: 'Media item not found' }
+      if (media.status === 'UPLOADING') return { statusCode: 409, message: 'Complete and verify the upload before changing its status' }
+      await connection.execute(
+        'UPDATE school_media_items SET status = ?, published_at = CASE WHEN ? = ? THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE NULL END, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, status, 'PUBLISHED', mediaId],
+      )
+      await writeAuditLog(connection, req, status === 'PUBLISHED' ? 'SCHOOL_MEDIA_PUBLISHED' : 'SCHOOL_MEDIA_STATUS_CHANGED', 'school_media_item', mediaId, {
+        title: String(media.title),
+        previousStatus: String(media.status),
+        status,
+      })
+      return { statusCode: 200, message: status === 'PUBLISHED' ? 'Media published to the public school gallery' : 'Media status updated' }
+    })
+    res.status(result.statusCode).json({ success: result.statusCode < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'update school media status', error)
+  }
+})
+
+router.delete('/media/:mediaId', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  if (!mediaId) {
+    res.status(400).json({ success: false, message: 'A valid media ID is required' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status FROM school_media_items WHERE id = ? LIMIT 1',
+      [mediaId],
+    )
+    const media = (rows as Record<string, unknown>[])[0]
+    if (!media) {
+      res.status(404).json({ success: false, message: 'Media item not found' })
+      return
+    }
+    const objectExists = media.status !== 'UPLOADING' || await storedMediaObjectExists(String(media.objectPath))
+    if (objectExists) await deleteStoredMedia(String(media.objectPath))
+    await withTransaction(async (connection) => {
+      await writeAuditLog(connection, req, 'SCHOOL_MEDIA_DELETED', 'school_media_item', mediaId, {
+        title: String(media.title),
+        previousStatus: String(media.status),
+      })
+      await connection.execute('DELETE FROM school_media_items WHERE id = ?', [mediaId])
+    })
+    res.json({ success: true, message: 'Media item and stored file deleted' })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError || error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to delete the stored media file.' })
+      return
+    }
+    fail(res, 'delete school media', error)
+  }
+})
 
 const visitStatuses = ['NEW', 'CONTACTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
 

@@ -5,6 +5,7 @@ import PortalApp from './PortalApp'
 import InvitationAcceptApp from './InvitationAcceptApp'
 import TeacherApp from './TeacherApp'
 import VisitRequestForm from './VisitRequestForm'
+import MediaGallery from './MediaGallery'
 import StaffPortalApp from './StaffPortalApp'
 import './tailwind.css'
 import './styles.css'
@@ -200,6 +201,7 @@ function App() {
   const menuItems = [
     { label: t.navHome, href: '#home' },
     { label: t.navSchool, href: '#school' },
+    { label: language === 'en' ? 'Gallery' : 'Amafoto na videwo', href: '#gallery' },
     { label: t.navUpdates, href: '#updates' },
     { label: t.navContact, href: '#contact' },
   ]
@@ -303,6 +305,8 @@ function App() {
             </article>
           </div>
         </section>
+
+        <MediaGallery language={language} />
 
         <section className="public-updates-section" id="updates">
           <div className="public-updates-header">
