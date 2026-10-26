@@ -115,3 +115,26 @@ test('shared-store limiter fails closed when the shared store is unavailable', a
   assert.equal(response.statusCode, 503)
   assert.equal(nextCalls, 0)
 })
+
+test('shared-store limiter supports endpoint-specific rate-limit messages', async () => {
+  let count = 0
+  const limit = createDatabaseRateLimiter(
+    60_000,
+    1,
+    'school-visit-requests',
+    async (_key, windowMs) => ({ count: ++count, resetAt: Date.now() + windowMs }),
+    'Too many school visit requests.',
+    'School visit requests are temporarily unavailable.',
+  )
+  const invoke = async () => {
+    const response = makeResponse()
+    limit(makeRequest() as never, response.response as never, (() => {}) as never)
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    return response
+  }
+
+  await invoke()
+  const blocked = await invoke()
+  assert.equal(blocked.statusCode, 429)
+  assert.equal((blocked.body as { message: string }).message, 'Too many school visit requests.')
+})
