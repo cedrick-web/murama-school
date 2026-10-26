@@ -398,6 +398,25 @@ export default function AdminApp() {
     return () => { active = false }
   }, [status, token])
 
+  useEffect(() => {
+    if (status !== 'ready' || !token) return
+    const refreshAdminRecords = () => {
+      Promise.all([
+        request<{ users: AdminUser[] }>('/api/admin/users', token),
+        request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token),
+        request<{ students: InvitationStudent[] }>('/api/admin/people/students', token),
+      ]).then(([userResult, invitationResult, studentResult]) => {
+        setUsers(userResult.users)
+        setInvitations(invitationResult.invitations)
+        setInvitationStudents(studentResult.students)
+      }).catch((reason: unknown) => {
+        setInvitationError(reason instanceof Error ? reason.message : 'Unable to refresh school account records')
+      })
+    }
+    window.addEventListener('murama:admin-data-changed', refreshAdminRecords)
+    return () => window.removeEventListener('murama:admin-data-changed', refreshAdminRecords)
+  }, [status, token])
+
   function signOut() {
     sessionStorage.removeItem(tokenKey)
     setToken(null)
