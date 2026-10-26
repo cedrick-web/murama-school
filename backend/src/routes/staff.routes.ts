@@ -4,7 +4,7 @@ import { isDatabaseUnavailable, pool } from '../config/database.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 
 const router = Router()
-router.use(requireAuth, requireRole('HEADTEACHER', 'TEACHER', 'STAFF'))
+router.use(requireAuth, requireRole('HEADTEACHER', 'STAFF'))
 
 type Row = Record<string, unknown>
 
@@ -54,7 +54,7 @@ router.get('/overview', async (req: AuthenticatedRequest, res) => {
       studentsInAssignedClasses: 0,
     }
 
-    if (teacher && (role === 'TEACHER' || role === 'HEADTEACHER')) {
+    if (teacher && role === 'HEADTEACHER') {
       const teacherId = Number(teacher.id)
       const [scheduleRows, assessmentRows, studentRows] = await Promise.all([
         pool.execute(
@@ -90,7 +90,7 @@ router.get('/overview', async (req: AuthenticatedRequest, res) => {
         employeeNumber: teacher?.employeeNumber ?? null,
       },
       permissions: {
-        canViewTeachingAssignments: Boolean(teacher) && ['TEACHER', 'HEADTEACHER'].includes(role),
+        canViewTeachingAssignments: Boolean(teacher) && role === 'HEADTEACHER',
         canManageSchoolAdministration: false,
       },
       teaching,
@@ -103,10 +103,10 @@ router.get('/overview', async (req: AuthenticatedRequest, res) => {
 })
 
 router.get('/timetable', async (req: AuthenticatedRequest, res) => {
-  if (!['TEACHER', 'HEADTEACHER'].includes(req.user!.role)) {
+  if (req.user!.role !== 'HEADTEACHER') {
     res.status(403).json({
       success: false,
-      message: 'Teaching timetable access is available to teacher accounts only',
+      message: 'Teaching timetable access is available to the headteacher workspace only',
     })
     return
   }
@@ -137,7 +137,7 @@ router.get('/classes', async (req: AuthenticatedRequest, res) => {
   if (!['TEACHER', 'HEADTEACHER'].includes(req.user!.role)) {
     res.status(403).json({
       success: false,
-      message: 'Teaching class access is available to teacher accounts only',
+      message: 'Teaching class access is available to the headteacher workspace only',
     })
     return
   }
