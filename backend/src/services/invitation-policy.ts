@@ -1,5 +1,5 @@
 export interface InvitationState {
-  expiresAt: unknown
+  expiresAt?: unknown
   acceptedAt?: unknown
   revokedAt?: unknown
   isActive?: unknown
