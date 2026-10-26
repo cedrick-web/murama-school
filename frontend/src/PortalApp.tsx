@@ -114,7 +114,10 @@ export default function PortalApp() {
   const [authError, setAuthError] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
-  const [section, setSection] = useState<PortalSection>(() => {\n    const segment = window.location.pathname.split('/').filter(Boolean).pop()\n    return segment && Object.hasOwn(sectionLabels, segment) ? segment as PortalSection : 'overview'\n  })
+  const [section, setSection] = useState<PortalSection>(() => {
+    const segment = window.location.pathname.split('/').filter(Boolean).pop()
+    return segment && Object.hasOwn(sectionLabels, segment) ? segment as PortalSection : 'overview'
+  })
   const [children, setChildren] = useState<RecordRow[]>([])
   const [selectedChildId, setSelectedChildId] = useState('')
   const [data, setData] = useState<ApiEnvelope | null>(null)
