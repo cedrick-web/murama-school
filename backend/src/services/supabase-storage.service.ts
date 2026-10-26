@@ -101,7 +101,7 @@ export async function verifyUploadedMedia(path: string, expectedMimeType: string
   const response = await fetch(
     baseUrl + '/storage/v1/object/info/' + BUCKET + '/' + objectPathUrl(path),
     {
-      method: 'GET',
+      method: 'HEAD',
       headers: {
         apikey: serviceKey,
         Authorization: 'Bearer ' + serviceKey,
@@ -112,13 +112,8 @@ export async function verifyUploadedMedia(path: string, expectedMimeType: string
   if (!response.ok) {
     throw new StorageServiceError('Supabase Storage could not verify the uploaded media', response.status)
   }
-  const body = await response.json().catch(() => null) as Record<string, unknown> | null
-  if (!body) return false
-  const metadata = body.metadata && typeof body.metadata === 'object'
-    ? body.metadata as Record<string, unknown>
-    : {}
-  const actualSize = Number(body.size ?? metadata.size)
-  const actualMime = String(body.mimetype ?? body.contentType ?? metadata.mimetype ?? metadata.contentType ?? '').toLowerCase()
+  const actualSize = Number(response.headers.get('content-length'))
+  const actualMime = (response.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase()
   return Number.isFinite(actualSize)
     && actualSize === expectedSize
     && actualMime === expectedMimeType.toLowerCase()
