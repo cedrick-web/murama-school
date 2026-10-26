@@ -1,9 +1,10 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import './operations.css'
 
-type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages' | 'visits'
+type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages' | 'visits' | 'media' | 'visits'
 
-const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages', 'visits']
+const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages', 'visits', 'media']
 
 function operationsTabFromPath(pathname: string): Tab {
   const segment = pathname.replace(/\/+$/, '').split('/')[3]
@@ -33,7 +34,7 @@ interface FeeItem { id: number; studentId: number; admissionNumber: string; firs
 interface Payment { id: number; receiptNumber: string; admissionNumber: string; firstName: string; lastName: string; amount: number | string; paymentMethod: PaymentMethod; reference: string | null; paidAt: string }
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
 interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
-interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
+interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }\ninterface MediaItem { id: number; title: string; altText: string; description: string | null; category: string; mediaType: 'IMAGE' | 'VIDEO'; objectPath: string; publicUrl: string; mimeType: string; sizeBytes: number; status: 'UPLOADING' | 'READY' | 'PUBLISHED' | 'ARCHIVED'; publishedAt: string | null; createdAt: string }
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -112,7 +113,7 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'timetable', title: 'Timetable', sub: 'Periods & teacher slots', number: '03' },
     { id: 'finance', title: 'Fees & payments', sub: 'Balances & receipts', number: '04' },
     { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
-    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },
+    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },\n    { id: 'media', title: 'School media', sub: 'Photos & video gallery', number: '07' },
   ]
   return <div className="operations-workspace">
     <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
@@ -127,7 +128,7 @@ export default function OperationsPanel({ token }: { token: string }) {
         {tab === 'gradebook' && <GradebookModule token={token} />}
         {tab === 'timetable' && <TimetableModule token={token} />}
         {tab === 'finance' && <FinanceModule token={token} />}
-        {tab === 'messages' && <MessagesModule token={token} />}\n        {tab === 'visits' && <VisitsModule token={token} />}
+        {tab === 'messages' && <MessagesModule token={token} />}\n        {tab === 'visits' && <VisitsModule token={token} />}\n        {tab === 'media' && <MediaModule token={token} />}
       </section>
     </div>
   </div>
