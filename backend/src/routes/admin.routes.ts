@@ -147,7 +147,7 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
   const rawHours = req.body?.expiresInHours
   const expiresInHours = rawHours === undefined ? 48 : Number(rawHours)
 
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     res.status(400).json({ success: false, message: 'Provide a valid email address for an existing inactive school account' })
     return
   }
@@ -167,42 +167,42 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
         [email],
       )
       const target = (userRows as Record<string, unknown>[])[0]
-      if (!target) return { status: 404, message: 'No school account exists for this email' }
-      if (Boolean(target.isActive)) return { status: 409, message: 'This school account is already active' }
+      if (!target) return { ok: false as const, status: 404, message: 'No school account exists for this email' }
+      if (Boolean(target.isActive)) return { ok: false as const, status: 409, message: 'This school account is already active' }
       if (!['STUDENT', 'PARENT'].includes(String(target.role))) {
-        return { status: 409, message: 'Invitations currently support existing student and parent accounts only' }
+        return { ok: false as const, status: 409, message: 'Invitations currently support existing student and parent accounts only' }
       }
 
       let linkedStudentId: number | null = null
       let parentRelationship: string | null = null
       if (target.role === 'STUDENT') {
         if (studentId !== null || relationship) {
-          return { status: 400, message: 'Student invitations do not accept parent-link fields' }
+          return { ok: false as const, status: 400, message: 'Student invitations do not accept parent-link fields' }
         }
         const [studentRows] = await connection.execute(
           'SELECT id FROM students WHERE user_id = ? LIMIT 1',
           [Number(target.id)],
         )
         if (!(studentRows as Record<string, unknown>[]).length) {
-          return { status: 409, message: 'The student account is not linked to a student record' }
+          return { ok: false as const, status: 409, message: 'The student account is not linked to a student record' }
         }
       } else {
         if (!studentId || relationship.length < 2) {
-          return { status: 400, message: 'Parent invitations require a linked student ID and relationship' }
+          return { ok: false as const, status: 400, message: 'Parent invitations require a linked student ID and relationship' }
         }
         const [parentRows] = await connection.execute(
           'SELECT id FROM parents WHERE user_id = ? LIMIT 1',
           [Number(target.id)],
         )
         if (!(parentRows as Record<string, unknown>[]).length) {
-          return { status: 409, message: 'The parent account is not linked to a parent record' }
+          return { ok: false as const, status: 409, message: 'The parent account is not linked to a parent record' }
         }
         const [studentRows] = await connection.execute(
           'SELECT id FROM students WHERE id = ? LIMIT 1',
           [studentId],
         )
         if (!(studentRows as Record<string, unknown>[]).length) {
-          return { status: 404, message: 'The selected student record was not found' }
+          return { ok: false as const, status: 404, message: 'The selected student record was not found' }
         }
         linkedStudentId = studentId
         parentRelationship = relationship
@@ -224,14 +224,16 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
         linkedStudentId,
       })
       return {
+        ok: true as const,
         status: 201,
+        message: 'Invitation created',
         invitationId,
         email: String(target.email),
         role: String(target.role),
       }
     })
 
-    if (result.status !== 201) {
+    if (!result.ok) {
       res.status(result.status).json({ success: false, message: result.message })
       return
     }
