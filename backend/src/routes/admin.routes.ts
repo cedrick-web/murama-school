@@ -9,7 +9,8 @@ import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
-import { ALLOWED_MEDIA_TYPES, MAX_MEDIA_BYTES, createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { validateMediaUpload } from '../services/media-upload-policy.js'
 
 const router = Router()
 const validRoles: UserRole[] = [
@@ -682,8 +683,6 @@ router.delete('/announcements/:announcementId', async (req: AuthenticatedRequest
 
 
 
-const mediaCategories = ['SCHOOL_LIFE', 'EVENT', 'CAMPUS', 'ANNOUNCEMENT', 'OTHER'] as const
-
 function mediaExtension(mimeType: string): string {
   const extensions: Record<string, string> = {
     'image/jpeg': '.jpg',
@@ -727,23 +726,8 @@ router.get('/media', async (req: AuthenticatedRequest, res) => {
 })
 
 router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
-  const title = typeof req.body?.title === 'string' ? req.body.title.trim() : ''
-  const altText = typeof req.body?.altText === 'string' ? req.body.altText.trim() : ''
-  const description = req.body?.description === undefined || req.body?.description === null
-    ? null
-    : typeof req.body.description === 'string' ? req.body.description.trim() : undefined
-  const category = typeof req.body?.category === 'string' ? req.body.category.trim().toUpperCase() : 'SCHOOL_LIFE'
-  const mimeType = typeof req.body?.mimeType === 'string' ? req.body.mimeType.trim().toLowerCase() : ''
-  const sizeBytes = Number(req.body?.sizeBytes)
-  if (
-    title.length < 1 || title.length > 180
-    || altText.length > 300
-    || description === undefined || (description !== null && description.length > 2000)
-    || !mediaCategories.includes(category as typeof mediaCategories[number])
-    || !ALLOWED_MEDIA_TYPES.includes(mimeType as typeof ALLOWED_MEDIA_TYPES[number])
-    || !Number.isSafeInteger(sizeBytes) || sizeBytes < 1 || sizeBytes > MAX_MEDIA_BYTES
-    || (mimeType.startsWith('image/') && altText.length < 1)
-  ) {
+  const media = validateMediaUpload(req.body ?? {})
+  if (!media) {
     res.status(400).json({
       success: false,
       message: 'Provide a title, image alt text when applicable, valid media category, allowed image/video type, and file size up to 25 MB.',
@@ -751,7 +735,7 @@ router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
     return
   }
 
-  const mediaType = mimeType.startsWith('image/') ? 'IMAGE' : 'VIDEO'
+  const { title, altText, description, category, mimeType, sizeBytes, mediaType } = media
   const objectPath = randomUUID() + mediaExtension(mimeType)
   let mediaId: number | null = null
   try {
