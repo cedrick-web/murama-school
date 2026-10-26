@@ -164,7 +164,7 @@ router.get('/classes/:classId/students', async (req: AuthenticatedRequest, res: 
       res.json({ success: true, students: [] })
       return
     }
-    const assigned = await hasClassAssignment(Number(teacher.teacherId), classId, Number(academicYear.id), subjectId)
+    const assigned = await hasClassAssignment(Number(teacher.teacherId), classId, Number(academicYear.id), subjectId ?? undefined)
     if (!assigned) {
       res.status(403).json({ success: false, message: 'You are not assigned to this class and subject' })
       return
