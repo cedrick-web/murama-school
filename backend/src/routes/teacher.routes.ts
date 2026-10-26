@@ -116,6 +116,17 @@ router.get('/overview', async (req: AuthenticatedRequest, res: Response) => {
   }
 })
 
+router.get('/terms', async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT t.id, t.name, t.starts_on AS startsOn, t.ends_on AS endsOn, t.sequence_no AS sequenceNo, ay.id AS academicYearId, ay.name AS academicYear FROM terms t INNER JOIN academic_years ay ON ay.id = t.academic_year_id WHERE ay.is_current = TRUE ORDER BY t.sequence_no',
+    )
+    res.json({ success: true, terms: rows })
+  } catch (error) {
+    reportFailure(res, error, 'terms')
+  }
+})
+
 router.get('/classes', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const teacher = await getTeacher(req.user!.id)
