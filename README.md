@@ -157,6 +157,8 @@ Before enabling media uploads, apply `supabase/migrations/20261026170134_school_
 
 The migration `supabase/migrations/20261026170532_profiles_policy_and_invitation_indexes.sql` restricts optional Google identity profiles to their own permanent Supabase Auth identity, explicitly excluding anonymous Auth sessions, and adds indexes for the invitation creator and linked-student foreign keys. School records remain server-accessed through the Express API; direct `anon` and `authenticated` table grants remain revoked for the school-management tables.
 
+The migration `supabase/migrations/20261026170628_media_visit_foreign_key_indexes.sql` adds indexes for the media uploader and visit-request handler foreign keys identified by the live Supabase performance advisor.
+
 ## Live data readiness
 
 The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.
