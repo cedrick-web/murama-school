@@ -74,12 +74,12 @@ test('returns generated IDs for secure account invitations', () => {
 
 test('returns generated IDs for parent, teacher, and teacher assignment inserts', () => {
   const cases = [
-    ['INSERT INTO parents (user_id, occupation) VALUES (?, ?)', 'INSERT INTO parents (user_id, occupation) VALUES ($1, $2) RETURNING id'],
-    ['INSERT INTO teachers (user_id, department) VALUES (?, ?)', 'INSERT INTO teachers (user_id, department) VALUES ($1, $2) RETURNING id'],
-    ['INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES (?, ?, ?, ?)', 'INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES ($1, $2, $3, $4) RETURNING id'],
+    ['INSERT INTO parents (user_id, occupation) VALUES (?, ?)', 'INSERT INTO parents (user_id, occupation) VALUES ($1, $2) RETURNING id', [1, 'teacher']],
+    ['INSERT INTO teachers (user_id, department) VALUES (?, ?)', 'INSERT INTO teachers (user_id, department) VALUES ($1, $2) RETURNING id', [1, 'science']],
+    ['INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES (?, ?, ?, ?)', 'INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES ($1, $2, $3, $4) RETURNING id', [1, 2, 3, 4]],
   ] as const
-  for (const [input, expected] of cases) {
-    const translated = translateMysqlQuery(input, [1, 2, 3, 4])
+  for (const [input, expected, values] of cases) {
+    const translated = translateMysqlQuery(input, values)
     assert.equal(translated.text, expected)
     assert.equal(translated.returnsId, true)
   }
