@@ -139,6 +139,168 @@ export default function OperationsPanel({ token }: { token: string }) {
 }
 
 
+
+function MediaModule({ token }: { token: string }) {
+  const [status, setStatus] = useState('ALL')
+  const [media, setMedia] = useState<MediaItem[]>([])
+  const [title, setTitle] = useState('')
+  const [altText, setAltText] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('SCHOOL_LIFE')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = status === 'ALL' ? '' : '?status=' + encodeURIComponent(status)
+      const result = await api<{ media: MediaItem[] }>('/api/admin/media' + query, token)
+      setMedia(result.media)
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setLoading(false)
+    }
+  }, [status, token])
+  useEffect(() => { void load() }, [load])
+
+  async function finishUpload(mediaId: number) {
+    await api('/api/admin/media/' + mediaId + '/complete', token, { method: 'POST' })
+    setNotice('Upload verified. Review the item and publish it when it is ready for the public gallery.')
+    await load()
+  }
+
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    if (!file) {
+      setError('Choose a photo or video file first.')
+      return
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'video/mp4', 'video/webm']
+    if (!allowed.includes(file.type)) {
+      setError('Use JPEG, PNG, WebP, AVIF, MP4 or WebM media.')
+      return
+    }
+    if (file.size < 1 || file.size > 25 * 1024 * 1024) {
+      setError('The file must be smaller than or equal to 25 MB.')
+      return
+    }
+    if (file.type.startsWith('image/') && !altText.trim()) {
+      setError('Add descriptive alt text for accessibility before uploading an image.')
+      return
+    }
+    setUploading(true)
+    let mediaId: number | null = null
+    try {
+      const intent = await api<{ upload: { mediaId: number; objectPath: string; uploadToken: string } }>('/api/admin/media/upload-intent', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.trim(),
+          altText: altText.trim(),
+          description: description.trim(),
+          category,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        }),
+      })
+      mediaId = intent.upload.mediaId
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
+      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+      if (!supabaseUrl || !publishableKey) throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to enable school media uploads.')
+      const client = createClient(supabaseUrl, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      })
+      const { error: storageError } = await client.storage
+        .from('school-media')
+        .uploadToSignedUrl(intent.upload.objectPath, intent.upload.uploadToken, file, {
+          contentType: file.type,
+          cacheControl: '3600',
+        })
+      if (storageError) throw new Error('Storage upload failed: ' + storageError.message)
+      await finishUpload(mediaId)
+      setTitle('')
+      setAltText('')
+      setDescription('')
+      setCategory('SCHOOL_LIFE')
+      setFile(null)
+    } catch (reason) {
+      setError(messageOf(reason))
+      if (mediaId !== null) setNotice('If the file finished uploading, use the Uploading item below to retry verification or delete the incomplete record.')
+      await load()
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function changeStatus(item: MediaItem, nextStatus: 'READY' | 'PUBLISHED' | 'ARCHIVED') {
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/media/' + item.id + '/status', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      setNotice(nextStatus === 'PUBLISHED' ? 'Media published to the public school gallery.' : 'Media status updated.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function remove(item: MediaItem) {
+    if (!window.confirm('Delete “' + item.title + '” and its stored file? This cannot be undone.')) return
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/media/' + item.id, token, { method: 'DELETE' })
+      setNotice('Media item deleted.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return <section className="operations-section">
+    <div className="operations-section-heading"><div><h4>School photo and video gallery</h4><p>Upload original school media, review it, then publish only approved items. Public visitors can see published items only.</p></div><button type="button" className="operations-button secondary" disabled={loading} onClick={() => void load()}>Refresh</button></div>
+    <form className="media-admin-upload" onSubmit={upload}>
+      <div className="media-admin-upload-heading"><span className="operations-eyebrow">NEW GALLERY ITEM</span><h4>Upload school media</h4><p>JPEG, PNG, WebP, AVIF, MP4 or WebM · Maximum 25 MB per file</p></div>
+      {error && <div className="operations-state is-error" role="alert">{error}</div>}
+      {notice && <div className="operations-notice" role="status">{notice}</div>}
+      <div className="operations-form-grid">
+        <Field label="Display title"><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required placeholder="e.g. School science exhibition" /></Field>
+        <Field label="Category"><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="SCHOOL_LIFE">School life</option><option value="EVENT">Event</option><option value="CAMPUS">Campus</option><option value="ANNOUNCEMENT">Announcement</option><option value="OTHER">Other</option></select></Field>
+        <Field label="Alt text (required for photos)"><input value={altText} onChange={(event) => setAltText(event.target.value)} maxLength={300} placeholder="Describe the photo for screen readers" /></Field>
+        <Field label="Description (optional)"><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={2} placeholder="Context for parents and students" /></Field>
+        <Field label="Photo or video file"><input type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required /></Field>
+        <div className="media-admin-file-summary"><strong>{file?.name ?? 'No file selected'}</strong><small>{file ? fmtNumber(file.size / 1024 / 1024) + ' MB' : 'Choose a file from your device'}</small></div>
+      </div>
+      <button className="operations-button primary" type="submit" disabled={uploading}>{uploading ? 'Uploading and verifying…' : 'Upload for review'}</button>
+      <p className="media-admin-security-note">Uploads use short-lived signed tokens. The service-role key stays on the server. Files are not visible publicly until an administrator publishes them.</p>
+    </form>
+    <div className="operations-section-heading media-admin-list-heading"><div><h4>Published and pending media</h4><p>Review, publish, archive or remove gallery items.</p></div><Field label="Filter status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">All statuses</option><option value="UPLOADING">Uploading</option><option value="READY">Ready for review</option><option value="PUBLISHED">Published</option><option value="ARCHIVED">Archived</option></select></Field></div>
+    <State loading={loading} empty={!loading && !media.length ? 'No media items match this filter.' : undefined} retry={() => void load()} />
+    {!loading && media.length > 0 && <div className="media-admin-grid">{media.map((item) => <article className="media-admin-card" key={item.id}>
+      <div className="media-admin-preview">{item.status === 'UPLOADING' ? <span>UPLOAD IN PROGRESS</span> : item.mediaType === 'VIDEO' ? <video controls preload="metadata"><source src={item.publicUrl} type={item.mimeType} /></video> : <img src={item.publicUrl} alt={item.altText || item.title} loading="lazy" />}</div>
+      <div className="media-admin-card-body"><div className="media-admin-card-meta"><span>{item.mediaType} · {item.category.replace(/_/g, ' ')}</span><span className={'visit-admin-status status-' + item.status.toLowerCase()}>{item.status}</span></div><h4>{item.title}</h4>{item.description && <p>{item.description}</p>}<small>{fmtNumber(item.sizeBytes / 1024 / 1024)} MB · {shortDate(item.createdAt)}</small>
+        <div className="media-admin-actions">{item.status === 'READY' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish</button>}{item.status === 'PUBLISHED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'ARCHIVED')}>Archive</button>}{item.status === 'ARCHIVED' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish again</button>}{item.status !== 'UPLOADING' && item.status !== 'READY' && item.status !== 'PUBLISHED' && item.status !== 'ARCHIVED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'READY')}>Mark ready</button>}<button className="operations-button danger" type="button" disabled={busyId === item.id} onClick={() => void remove(item)}>{busyId === item.id ? 'Working…' : 'Delete'}</button></div>
+      </div>
+    </article>)}</div>}
+  </section>
+}
+
 function VisitsModule({ token }: { token: string }) {
   const [status, setStatus] = useState('NEW')
   const [requests, setRequests] = useState<VisitRequest[]>([])
