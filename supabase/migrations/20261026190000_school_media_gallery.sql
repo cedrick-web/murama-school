@@ -4,7 +4,7 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 VALUES (
   'school-media',
   'school-media',
-  TRUE,
+  FALSE,
   26214400,
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'video/mp4', 'video/webm']
 )
@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS public.school_media_items (
   category VARCHAR(30) NOT NULL DEFAULT 'SCHOOL_LIFE',
   media_type VARCHAR(10) NOT NULL,
   object_path TEXT NOT NULL UNIQUE,
-  public_url TEXT NOT NULL,
   mime_type VARCHAR(100) NOT NULL,
   size_bytes BIGINT NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'UPLOADING',
