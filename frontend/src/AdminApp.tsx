@@ -691,6 +691,58 @@ export default function AdminApp() {
                 <div><p className="admin-eyebrow">SCHOOL ADMINISTRATION</p><h2>User management</h2><p className="admin-muted">Review school accounts and manage access.</p></div>
                 <div className="admin-user-count" aria-label={users.length + ' accounts'}><strong>{users.length}</strong><span>accounts</span></div>
               </div>
+              <section className="admin-table-card invitation-create-card" aria-labelledby="invitations-create-heading">
+                <div className="admin-table-heading">
+                  <div><h2 id="invitations-create-heading">Secure account invitations</h2><p>Activate existing inactive student and parent accounts with a one-time link. No password is sent or stored in the link.</p></div>
+                  {loadingInvitations && <span className="admin-muted" aria-live="polite">Loading invitations…</span>}
+                </div>
+                <form className="invitation-create-form" onSubmit={createInvitation}>
+                  <label>Inactive school account
+                    <select value={invitationEmail} onChange={(event) => { setInvitationEmail(event.target.value); setInvitationUrl(''); setInvitationError(''); setInvitationMessage('') }} required>
+                      <option value="">Choose an account</option>
+                      {invitationCandidates.map((account) => <option key={account.id} value={account.email ?? ''}>{account.firstName} {account.lastName} · {account.email} · {account.role}</option>)}
+                    </select>
+                  </label>
+                  {selectedInvitationAccount?.role === 'PARENT' && <>
+                    <label>Linked student
+                      <select value={invitationStudentId} onChange={(event) => setInvitationStudentId(event.target.value)} required>
+                        <option value="">Choose the verified student record</option>
+                        {invitationStudents.map((student) => <option key={student.id} value={student.id}>{student.admissionNumber} · {student.firstName} {student.lastName}{student.className ? ' · ' + student.className : ''}</option>)}
+                      </select>
+                    </label>
+                    <label>Relationship to student
+                      <input value={invitationRelationship} onChange={(event) => setInvitationRelationship(event.target.value)} maxLength={50} required placeholder="Parent, guardian, mother, father…" />
+                    </label>
+                  </>}
+                  <button className="admin-quiet-button invitation-create-button" type="submit" disabled={invitationBusy || invitationCandidates.length === 0}>{invitationBusy ? 'Creating secure link…' : 'Create 48-hour invitation'}</button>
+                </form>
+                {invitationError && <p className="admin-alert invitation-feedback" role="alert">{invitationError}</p>}
+                {invitationMessage && <p className="invitation-feedback invitation-feedback-success" role="status">{invitationMessage}</p>}
+                {invitationUrl && <div className="invitation-link-output"><label>One-time invitation link<input readOnly value={invitationUrl} onFocus={(event) => event.currentTarget.select()} /></label><button className="admin-quiet-button" type="button" onClick={() => void copyInvitationLink()}>Copy link</button></div>}
+                {!invitationCandidates.length && <p className="admin-muted invitation-empty-note">There are no eligible inactive student or parent accounts with email addresses. Create the school record first, then issue an invitation.</p>}
+              </section>
+
+              <section className="admin-table-card invitation-history-card" aria-labelledby="invitation-history-heading">
+                <div className="admin-table-heading"><div><h2 id="invitation-history-heading">Invitation history</h2><p>Only status and expiry are shown here; invitation secrets are never listed.</p></div></div>
+                <div className="admin-table-scroll"><table>
+                  <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Linked student</th><th scope="col">Created / expires</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+                  <tbody>
+                    {invitations.map((invitation) => {
+                      const invitationStatus = invitation.acceptedAt ? 'Accepted' : invitation.revokedAt ? 'Revoked' : new Date(invitation.expiresAt).getTime() <= Date.now() ? 'Expired' : 'Pending'
+                      return <tr key={invitation.id}>
+                        <td data-label="Account"><strong>{invitation.firstName} {invitation.lastName}</strong><small className="admin-cell-secondary">{invitation.email}</small></td>
+                        <td data-label="Role">{invitation.role}</td>
+                        <td data-label="Linked student">{invitation.linkedAdmissionNumber ? invitation.linkedAdmissionNumber + ' · ' + (invitation.relationship ?? 'Parent') : '—'}</td>
+                        <td data-label="Created / expires"><span>{formatDate(invitation.createdAt)}</span><small className="admin-cell-secondary">Expires {formatDate(invitation.expiresAt)}</small></td>
+                        <td data-label="Status"><span className={'admin-status ' + (invitationStatus === 'Pending' ? 'is-inactive' : 'is-active')}>{invitationStatus}</span></td>
+                        <td data-label="Action">{invitationStatus === 'Pending' ? <button className="admin-quiet-button" type="button" disabled={revokingInvitationId === invitation.id} onClick={() => void revokeInvitation(invitation.id)}>{revokingInvitationId === invitation.id ? 'Revoking…' : 'Revoke'}</button> : <span className="admin-cell-secondary">No action</span>}</td>
+                      </tr>
+                    })}
+                    {!loadingInvitations && invitations.length === 0 && <tr><td className="admin-empty" colSpan={6}>No invitations have been created yet.</td></tr>}
+                  </tbody>
+                </table></div>
+              </section>
+
               <section className="admin-table-card" aria-labelledby="users-heading">
                 <div className="admin-table-heading"><div><h2 id="users-heading">School accounts</h2><p>Role and account access changes are recorded in the audit trail.</p></div>{loadingUsers && <span className="admin-muted" aria-live="polite">Loading…</span>}</div>
                 <div className="admin-table-toolbar">
