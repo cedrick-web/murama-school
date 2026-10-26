@@ -96,6 +96,26 @@ export async function createSignedMediaReadUrl(path: string, expiresIn = 3600): 
 }
 
 /** Confirm the private uploaded object exists and matches the declared MIME type and byte count. */
+
+export async function storedMediaObjectExists(path: string): Promise<boolean> {
+  const { baseUrl, serviceKey } = config()
+  const response = await fetch(
+    baseUrl + '/storage/v1/object/info/' + BUCKET + '/' + objectPathUrl(path),
+    {
+      method: 'HEAD',
+      headers: {
+        apikey: serviceKey,
+        Authorization: 'Bearer ' + serviceKey,
+      },
+    },
+  )
+  if (response.status === 404) return false
+  if (!response.ok) {
+    throw new StorageServiceError('Supabase Storage could not inspect the media object', response.status)
+  }
+  return true
+}
+
 export async function verifyUploadedMedia(path: string, expectedMimeType: string, expectedSize: number): Promise<boolean> {
   const { baseUrl, serviceKey } = config()
   const response = await fetch(
