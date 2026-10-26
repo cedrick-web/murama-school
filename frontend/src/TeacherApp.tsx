@@ -60,6 +60,7 @@ interface ApiResult {
   success?: boolean
   message?: string
   token?: string
+  assessmentId?: number
   user?: TeacherUser
   teacher?: ApiRecord
   summary?: ApiRecord
