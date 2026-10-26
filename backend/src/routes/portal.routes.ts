@@ -3,6 +3,7 @@ import { Router, type Response } from 'express'
 import { isDatabaseUnavailable, pool } from '../config/database.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { AuthUser } from '../types/auth.js'
+import { authorizeStudentScope } from '../services/portal-access.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -47,8 +48,7 @@ async function resolveStudentId(user: AuthUser, requestedStudentId?: number): Pr
     )
     const student = (rows as Row[])[0]
     if (!student) return null
-    const id = Number(student.id)
-    return requestedStudentId === undefined || requestedStudentId === id ? id : null
+    return authorizeStudentScope(user.role, Number(student.id), [], requestedStudentId)
   }
 
   if (user.role === 'PARENT' && requestedStudentId !== undefined) {
@@ -57,7 +57,7 @@ async function resolveStudentId(user: AuthUser, requestedStudentId?: number): Pr
       [user.id, requestedStudentId],
     )
     const student = (rows as Row[])[0]
-    return student ? Number(student.id) : null
+    return authorizeStudentScope(user.role, null, student ? [Number(student.id)] : [], requestedStudentId)
   }
 
   return null
