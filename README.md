@@ -71,7 +71,15 @@ If the school already has records in MySQL, take a full backup of that database 
 npm run migrate:mysql-to-supabase
 ~~~
 
-The migration command copies real rows in foreign-key order, preserves primary keys, updates identity sequences, maps MySQL boolean fields to PostgreSQL booleans, and is safe to re-run for interrupted transfers when the source remains authoritative. It reports missing legacy tables explicitly. Run it during a write freeze, compare source/target row counts, verify attendance/grades/fee balances and payment receipts, and do not direct production traffic until the reconciliation is accepted. Supabase Auth users/password credentials and Auth profiles are not copied; identity configuration remains a separate step.
+The default command is a **read-only preflight**: it checks source/target table presence, column compatibility and row counts without writing to Supabase. Review every result and resolve any schema mismatch before proceeding. Back up the source and destination, freeze source writes, then explicitly enable write mode only when ready:
+
+~~~powershell
+$env:MIGRATION_ALLOW_WRITES = "true"
+npm run migrate:mysql-to-supabase -- --apply
+Remove-Item Env:MIGRATION_ALLOW_WRITES
+~~~
+
+Apply mode upserts rows in foreign-key order, preserves primary keys, updates identity sequences, maps MySQL boolean fields to PostgreSQL booleans, and commits each table in its own transaction. It verifies source/destination row counts and stops with a reconciliation error if counts differ. A failed run can leave earlier tables committed, so resolve the reported issue and rerun against the still-authoritative source; the importer does not delete destination-only records. Do not direct production traffic until counts and samples from attendance, grades, report cards, fee balances and payment receipts have been accepted. Supabase Auth identities are not created by this script and must be configured and tested separately.
 
 The original **database/xampp/murama_school_xampp.sql** and **database/schema.sql** are retained as legacy MySQL/XAMPP source definitions and data-migration references. They are no longer the application runtime database schema; the runtime baseline is in **supabase/migrations/**.
 
