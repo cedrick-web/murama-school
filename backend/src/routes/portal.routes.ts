@@ -120,10 +120,11 @@ const results: StudentAction = async (req, res, studentId) => {
     return
   }
 
-  const [rows] = await pool.execute(
-    'SELECT a.id AS assessmentId, a.title AS assessmentTitle, a.assessment_type AS assessmentType, a.assessment_date AS assessmentDate, a.max_score AS maxScore, ar.score, ar.remarks, sub.code AS subjectCode, sub.name AS subjectName, t.id AS termId, t.name AS termName, ay.name AS academicYear, rc.average_score AS termAverage, rc.class_position AS classPosition, rc.attendance_percentage AS attendancePercentage, rc.general_comment AS generalComment, rc.generated_at AS publishedAt FROM assessment_results ar INNER JOIN assessments a ON a.id = ar.assessment_id INNER JOIN subjects sub ON sub.id = a.subject_id INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN report_cards rc ON rc.student_id = ar.student_id AND rc.term_id = a.term_id AND rc.generated_at IS NOT NULL WHERE ar.student_id = ? AND (? IS NULL OR t.id = ?) ORDER BY t.starts_on DESC, a.assessment_date DESC, sub.name',
-    [studentId, termId, termId],
-  )
+  const query = termId === null
+    ? 'SELECT a.id AS assessmentId, a.title AS assessmentTitle, a.assessment_type AS assessmentType, a.assessment_date AS assessmentDate, a.max_score AS maxScore, ar.score, ar.remarks, sub.code AS subjectCode, sub.name AS subjectName, t.id AS termId, t.name AS termName, ay.name AS academicYear, rc.average_score AS termAverage, rc.class_position AS classPosition, rc.attendance_percentage AS attendancePercentage, rc.general_comment AS generalComment, rc.generated_at AS publishedAt FROM assessment_results ar INNER JOIN assessments a ON a.id = ar.assessment_id INNER JOIN subjects sub ON sub.id = a.subject_id INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN report_cards rc ON rc.student_id = ar.student_id AND rc.term_id = a.term_id AND rc.generated_at IS NOT NULL WHERE ar.student_id = ? ORDER BY t.starts_on DESC, a.assessment_date DESC, sub.name'
+    : 'SELECT a.id AS assessmentId, a.title AS assessmentTitle, a.assessment_type AS assessmentType, a.assessment_date AS assessmentDate, a.max_score AS maxScore, ar.score, ar.remarks, sub.code AS subjectCode, sub.name AS subjectName, t.id AS termId, t.name AS termName, ay.name AS academicYear, rc.average_score AS termAverage, rc.class_position AS classPosition, rc.attendance_percentage AS attendancePercentage, rc.general_comment AS generalComment, rc.generated_at AS publishedAt FROM assessment_results ar INNER JOIN assessments a ON a.id = ar.assessment_id INNER JOIN subjects sub ON sub.id = a.subject_id INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN report_cards rc ON rc.student_id = ar.student_id AND rc.term_id = a.term_id AND rc.generated_at IS NOT NULL WHERE ar.student_id = ? AND t.id = ? ORDER BY t.starts_on DESC, a.assessment_date DESC, sub.name'
+  const values = termId === null ? [studentId] : [studentId, termId]
+  const [rows] = await pool.execute(query, values)
   res.json({ success: true, results: rows })
 }
 
