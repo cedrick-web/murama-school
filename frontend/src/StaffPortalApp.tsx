@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import './staff-portal.css'
 
-type Role = 'HEADTEACHER' | 'TEACHER' | 'STAFF'
+type Role = 'HEADTEACHER' | 'STAFF'
 type Section = 'overview' | 'timetable' | 'classes' | 'messages' | 'notifications'
 interface User {
   id: number
@@ -105,7 +105,7 @@ export default function StaffPortalApp() {
     request<{ user: User }>('/api/auth/me', token)
       .then(({ user: current }) => {
         if (!active) return
-        if (!['HEADTEACHER', 'TEACHER', 'STAFF'].includes(current.role)) {
+        if (!['HEADTEACHER', 'STAFF'].includes(current.role)) {
           throw new Error('This workspace is for teachers and school staff. Use the appropriate school portal for your account.')
         }
         setUser(current)
@@ -129,7 +129,7 @@ export default function StaffPortalApp() {
     const jobs: Promise<unknown>[] = [
       request<ApiResponse>('/api/staff/overview', token).then((r) => { if (active) setOverview(r) }),
     ]
-    if (user.role === 'TEACHER' || user.role === 'HEADTEACHER') {
+    if (user.role === 'HEADTEACHER') {
       jobs.push(request<ApiResponse>('/api/staff/timetable', token).then((r) => { if (active) setEntries(r.entries ?? []) }))
       jobs.push(request<ApiResponse>('/api/staff/classes', token).then((r) => { if (active) setClasses(r.classes ?? []) }))
     }
@@ -151,7 +151,7 @@ export default function StaffPortalApp() {
         body: JSON.stringify({ email: email.trim(), password }),
       })
       if (!result.token || !result.user) throw new Error('The server did not return a valid school session')
-      if (!['HEADTEACHER', 'TEACHER', 'STAFF'].includes(result.user.role)) {
+      if (!['HEADTEACHER', 'STAFF'].includes(result.user.role)) {
         throw new Error('This workspace is for teachers and school staff. Use the appropriate school portal for your account.')
       }
       sessionStorage.setItem(tokenKey, result.token)
