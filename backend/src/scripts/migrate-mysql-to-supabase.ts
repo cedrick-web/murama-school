@@ -84,7 +84,15 @@ function convertValue(table: string, column: string, value: unknown): unknown {
 }
 
 async function main(): Promise<void> {
-  const batchSize = Math.min(500, Math.max(25, Number(process.env.MIGRATION_BATCH_SIZE ?? 200)))
+  const requestedBatchSize = Number(process.env.MIGRATION_BATCH_SIZE ?? 200)
+  const batchSize = Number.isFinite(requestedBatchSize) && Number.isInteger(requestedBatchSize)
+    ? Math.min(500, Math.max(25, requestedBatchSize))
+    : 200
+  const applyChanges = process.argv.includes('--apply')
+  if (applyChanges && process.env.MIGRATION_ALLOW_WRITES !== 'true') {
+    throw new Error('Write mode requires both --apply and MIGRATION_ALLOW_WRITES=true. The default mode is a read-only preflight.')
+  }
+
   const mysqlUrl = process.env.MYSQL_URL?.trim()
   const source = mysqlUrl
     ? await mysql.createConnection(mysqlUrl)
@@ -96,16 +104,25 @@ async function main(): Promise<void> {
   })
 
   let totalRows = 0
+  let reconciliationMismatch = false
+  const mysqlQuote = String.fromCharCode(96)
+  const quoteMysqlIdentifier = (identifier: string) => mysqlQuote + identifier.replace(new RegExp(mysqlQuote, 'g'), mysqlQuote + mysqlQuote) + mysqlQuote
+
   try {
     await source.query("SET time_zone = '+00:00'")
     await destination.unsafe('SELECT 1')
 
-    console.log('Starting MySQL → Supabase PostgreSQL data transfer.')
-    console.log('Keep the source database read-only during the transfer and run against a backed-up, migrated Supabase target.')
+    console.log(applyChanges
+      ? 'APPLY MODE: MySQL → Supabase upserts are enabled.'
+      : 'READ-ONLY PREFLIGHT: no destination rows will be written.')
+    console.log('Keep the source database read-only, verify the target project, and take a backup before apply mode.')
+    if (!applyChanges) {
+      console.log('After reviewing every preflight result, use --apply with MIGRATION_ALLOW_WRITES=true to write.')
+    }
 
     for (const table of tables) {
       const keys = primaryKeys[table]
-      const orderBy = keys.map((key) => '`' + key + '`').join(', ')
+      const sourceTable = quoteMysqlIdentifier(table)
       const [presenceRows] = await source.query(
         'SELECT TABLE_NAME AS tableName FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
         [table],
@@ -114,53 +131,109 @@ async function main(): Promise<void> {
         console.warn(table + ': source table is absent; skipped because the legacy database predates this module')
         continue
       }
-      const [countRows] = await source.query('SELECT COUNT(*) AS rowCount FROM `' + table + '`')
-      const sourceCount = Number((countRows as Array<Record<string, unknown>>)[0]?.rowCount ?? 0)
-      let copied = 0
 
-      for (let offset = 0; offset < sourceCount; offset += batchSize) {
-        const [rawRows] = await source.query(
-          'SELECT * FROM `' + table + '` ORDER BY ' + orderBy + ' LIMIT ? OFFSET ?',
-          [batchSize, offset],
-        )
-        const rows = rawRows as Array<Record<string, unknown>>
-        if (rows.length === 0) break
-
-        const columns = Object.keys(rows[0])
-        const quotedColumns = columns.map(quoteIdentifier)
-        const rowPlaceholders = rows.map((_row, rowIndex) => {
-          const slots = columns.map((_column, columnIndex) => (
-            '$' + (rowIndex * columns.length + columnIndex + 1)
-          ))
-          return '(' + slots.join(', ') + ')'
-        })
-        const parameters = rows.flatMap((row) => columns.map((column) => convertValue(table, column, row[column])))
-        const conflictColumns = keys.map(quoteIdentifier).join(', ')
-        const mutableColumns = columns.filter((column) => !keys.includes(column))
-        const conflictAction = mutableColumns.length
-          ? 'DO UPDATE SET ' + mutableColumns.map((column) => quoteIdentifier(column) + ' = EXCLUDED.' + quoteIdentifier(column)).join(', ')
-          : 'DO NOTHING'
-        const sql = 'INSERT INTO public.' + quoteIdentifier(table) +
-          ' (' + quotedColumns.join(', ') + ') VALUES ' + rowPlaceholders.join(', ') +
-          ' ON CONFLICT (' + conflictColumns + ') ' + conflictAction
-
-        await destination.unsafe(sql, parameters as never[])
-        copied += rows.length
+      const [sourceCountRows] = await source.query('SELECT COUNT(*) AS rowCount FROM ' + sourceTable)
+      const sourceCount = Number((sourceCountRows as Array<Record<string, unknown>>)[0]?.rowCount ?? 0)
+      const [sourceColumnRows] = await source.query('SHOW COLUMNS FROM ' + sourceTable)
+      const sourceColumns = new Set((sourceColumnRows as Array<Record<string, unknown>>).map((column) => String(column.Field)))
+      const [targetColumnRows] = await destination.unsafe(
+        'SELECT column_name, is_nullable, column_default, is_identity, is_generated FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2',
+        ['public', table],
+      )
+      const targetColumns = targetColumnRows as Array<Record<string, unknown>>
+      if (!targetColumns.length) {
+        throw new Error(table + ': target table is missing in Supabase. Apply schema migrations before importing data.')
+      }
+      const targetColumnNames = new Set(targetColumns.map((column) => String(column.column_name)))
+      const sourceOnlyColumns = [...sourceColumns].filter((column) => !targetColumnNames.has(column))
+      if (sourceOnlyColumns.length) {
+        throw new Error(table + ': source columns are absent from Supabase schema: ' + sourceOnlyColumns.join(', ') + '. Review a schema mapping before importing.')
+      }
+      const missingRequiredColumns = targetColumns
+        .filter((column) => column.is_nullable === 'NO'
+          && column.column_default === null
+          && column.is_identity !== 'YES'
+          && column.is_generated === 'NEVER'
+          && !sourceColumns.has(String(column.column_name)))
+        .map((column) => String(column.column_name))
+      if (missingRequiredColumns.length) {
+        throw new Error(table + ': required target columns are missing from the MySQL source: ' + missingRequiredColumns.join(', ') + '. Review a schema mapping before importing.')
       }
 
+      const [targetCountRows] = await destination.unsafe(
+        'SELECT COUNT(*) AS row_count FROM public.' + quoteIdentifier(table),
+      )
+      const targetCountBefore = Number((targetCountRows as Array<Record<string, unknown>>)[0]?.row_count ?? 0)
+
+      if (!applyChanges) {
+        totalRows += sourceCount
+        console.log(table + ': preflight OK; source=' + sourceCount + ', target-before=' + targetCountBefore + ', columns=' + sourceColumns.size)
+        continue
+      }
+
+      let copied = 0
+      await destination.begin(async (transaction) => {
+        for (let offset = 0; offset < sourceCount; offset += batchSize) {
+          const orderBy = keys.map((key) => quoteMysqlIdentifier(key)).join(', ')
+          const [rawRows] = await source.query(
+            'SELECT * FROM ' + sourceTable + ' ORDER BY ' + orderBy + ' LIMIT ? OFFSET ?',
+            [batchSize, offset],
+          )
+          const rows = rawRows as Array<Record<string, unknown>>
+          if (rows.length === 0) break
+
+          const columns = Object.keys(rows[0])
+          const quotedColumns = columns.map(quoteIdentifier)
+          const rowPlaceholders = rows.map((_row, rowIndex) => {
+            const slots = columns.map((_column, columnIndex) => (
+              'main().catch((error: unknown) => {
+  console.error('MySQL → Supabase migration failed:', error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})
+ + (rowIndex * columns.length + columnIndex + 1)
+            ))
+            return '(' + slots.join(', ') + ')'
+          })
+          const parameters = rows.flatMap((row) => columns.map((column) => convertValue(table, column, row[column])))
+          const conflictColumns = keys.map(quoteIdentifier).join(', ')
+          const mutableColumns = columns.filter((column) => !keys.includes(column))
+          const conflictAction = mutableColumns.length
+            ? 'DO UPDATE SET ' + mutableColumns.map((column) => quoteIdentifier(column) + ' = EXCLUDED.' + quoteIdentifier(column)).join(', ')
+            : 'DO NOTHING'
+          const sql = 'INSERT INTO public.' + quoteIdentifier(table) +
+            ' (' + quotedColumns.join(', ') + ') VALUES ' + rowPlaceholders.join(', ') +
+            ' ON CONFLICT (' + conflictColumns + ') ' + conflictAction
+
+          await transaction.unsafe(sql, parameters as never[])
+          copied += rows.length
+        }
+      })
+
       totalRows += copied
-      console.log(table + ': ' + copied + '/' + sourceCount + ' rows transferred')
+      const [targetAfterRows] = await destination.unsafe(
+        'SELECT COUNT(*) AS row_count FROM public.' + quoteIdentifier(table),
+      )
+      const targetCountAfter = Number((targetAfterRows as Array<Record<string, unknown>>)[0]?.row_count ?? 0)
+      const exactMatch = targetCountAfter === sourceCount
+      if (!exactMatch) reconciliationMismatch = true
+      console.log(table + ': source=' + sourceCount + ', copied=' + copied + ', target-before=' + targetCountBefore + ', target-after=' + targetCountAfter + (exactMatch ? ' [COUNT MATCH]' : ' [RECONCILIATION REQUIRED]'))
     }
 
-    for (const table of identityTables) {
-      const sql = "SELECT setval(pg_get_serial_sequence('public." + table + "', 'id'), " +
-        'GREATEST(COALESCE(MAX(id), 1), 1), COUNT(*) > 0) FROM public.' + quoteIdentifier(table)
-      await destination.unsafe(sql)
+    if (applyChanges) {
+      for (const table of identityTables) {
+        const sql = "SELECT setval(pg_get_serial_sequence('public." + table + "', 'id'), " +
+          'GREATEST(COALESCE(MAX(id), 1), 1), COUNT(*) > 0) FROM public.' + quoteIdentifier(table)
+        await destination.unsafe(sql)
+      }
+      console.log('Data transfer wrote/upserted ' + totalRows + ' source rows.')
+      if (reconciliationMismatch) {
+        throw new Error('One or more destination row counts do not exactly match the source. The upserts completed, but do not switch production traffic until the listed tables are reconciled.')
+      }
+      console.log('All imported source-table row counts match their destination counts.')
+    } else {
+      console.log('Preflight completed without writes. Source rows scheduled for import: ' + totalRows + '.')
     }
-
-    console.log('Data transfer completed. Total rows reconciled: ' + totalRows + '.')
-    console.log('Verify record counts and a sample from each module before switching production traffic.')
-    console.log('Supabase Auth users/profiles are intentionally not copied from MySQL passwords; configure and test sign-in separately.')
+    console.log('Supabase Auth identities are not created by this script. Verify school JWT login and Google identity linking separately.')
   } finally {
     await source.end()
     await destination.end({ timeout: 5 })
