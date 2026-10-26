@@ -251,7 +251,7 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
     }
 
     const invitationUrl = new URL('/invite', baseUrl.origin)
-    invitationUrl.searchParams.set('token', token)
+    invitationUrl.hash = new URLSearchParams({ token }).toString()
     res.status(201).json({
       success: true,
       invitation: {
