@@ -167,7 +167,7 @@ export default function StaffPortalApp() {
 
   const profile = overview?.profile
   const teaching = overview?.teaching
-  const canTeach = user?.role === 'TEACHER' || user?.role === 'HEADTEACHER'
+  const canTeach = user?.role === 'HEADTEACHER'
 
   if (authLoading) return <main className="staff-auth-screen"><div className="staff-spinner" /><p>Verifying your school account…</p></main>
   if (!token || !user) return <main className="staff-auth-screen"><section className="staff-login-card">
