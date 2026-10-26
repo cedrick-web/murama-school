@@ -52,6 +52,25 @@ router.get('/announcements', async (_req, res) => {
 })
 
 
+
+router.get('/media', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, public_url AS publicUrl, mime_type AS mimeType, size_bytes AS sizeBytes, published_at AS publishedAt FROM school_media_items WHERE status = ? ORDER BY published_at DESC, created_at DESC LIMIT 60',
+      ['PUBLISHED'],
+    )
+    res.json({ success: true, media: rows })
+  } catch (error) {
+    console.error('Unable to load public school media', error)
+    res.status(isDatabaseUnavailable(error) ? 503 : 500).json({
+      success: false,
+      message: isDatabaseUnavailable(error)
+        ? 'The school database is not configured or is temporarily unavailable.'
+        : 'Unable to load school media',
+    })
+  }
+})
+
 const visitRequestRateLimit = createRateLimiter(15 * 60 * 1000, 5)
 
 router.post('/visits', visitRequestRateLimit, async (req, res) => {
