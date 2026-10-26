@@ -294,7 +294,7 @@ export default function TeacherApp() {
       })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : 'Unable to load class roster') })
     return () => { active = false }
-  }, [token, user, authChecking, section, selectedClassId])
+  }, [token, user, authChecking, section, selectedClassId, refreshKey])
 
   useEffect(() => {
     if (!token || !user || authChecking || section !== 'assessments' || !selectedAssessmentId) {
