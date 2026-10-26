@@ -279,7 +279,7 @@ router.get('/assessments/:assessmentId/results', async (req: AuthenticatedReques
       return
     }
     const [assessmentRows] = await pool.execute(
-      'SELECT a.id, a.title, a.max_score AS maxScore, a.class_id AS classId, a.subject_id AS subjectId, a.term_id AS termId, t.academic_year_id AS academicYearId, ay.is_current AS isCurrent FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN teacher_subjects ts ON ts.class_id = a.class_id AND ts.subject_id = a.subject_id AND ts.academic_year_id = ay.id WHERE a.id = ? AND ts.teacher_id = ? LIMIT 1',
+      'SELECT a.id, a.title, a.max_score AS maxScore, a.class_id AS classId, c.name AS className, a.subject_id AS subjectId, sub.name AS subjectName, a.term_id AS termId, t.name AS termName, t.academic_year_id AS academicYearId, ay.is_current AS isCurrent FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN classes c ON c.id = a.class_id INNER JOIN subjects sub ON sub.id = a.subject_id INNER JOIN teacher_subjects ts ON ts.class_id = a.class_id AND ts.subject_id = a.subject_id AND ts.academic_year_id = ay.id WHERE a.id = ? AND ts.teacher_id = ? LIMIT 1',
       [assessmentId, Number(teacher.teacherId)],
     )
     const assessment = (assessmentRows as Row[])[0]
@@ -327,7 +327,7 @@ router.post('/assessments/:assessmentId/results', async (req: AuthenticatedReque
     }
     const result = await withTransaction(async (connection) => {
       const [rows] = await connection.execute(
-        'SELECT a.id, a.title, a.max_score AS maxScore, a.class_id AS classId, a.subject_id AS subjectId, a.term_id AS termId, t.academic_year_id AS academicYearId, ay.is_current AS isCurrent FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN teacher_subjects ts ON ts.class_id = a.class_id AND ts.subject_id = a.subject_id AND ts.academic_year_id = ay.id WHERE a.id = ? AND ts.teacher_id = ? LIMIT 1 FOR UPDATE',
+        'SELECT a.id, a.title, a.max_score AS maxScore, a.class_id AS classId, c.name AS className, a.subject_id AS subjectId, sub.name AS subjectName, a.term_id AS termId, t.name AS termName, t.academic_year_id AS academicYearId, ay.is_current AS isCurrent FROM assessments a INNER JOIN terms t ON t.id = a.term_id INNER JOIN academic_years ay ON ay.id = t.academic_year_id INNER JOIN classes c ON c.id = a.class_id INNER JOIN subjects sub ON sub.id = a.subject_id INNER JOIN teacher_subjects ts ON ts.class_id = a.class_id AND ts.subject_id = a.subject_id AND ts.academic_year_id = ay.id WHERE a.id = ? AND ts.teacher_id = ? LIMIT 1 FOR UPDATE',
         [assessmentId, Number(teacher.teacherId)],
       )
       const assessment = (rows as Row[])[0]
