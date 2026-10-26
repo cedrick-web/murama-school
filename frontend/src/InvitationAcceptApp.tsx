@@ -5,7 +5,7 @@ interface InvitationInfo {
   email: string
   firstName: string
   lastName: string
-  role: 'STUDENT' | 'PARENT'
+  role: 'STUDENT' | 'PARENT' | 'TEACHER'
   expiresAt: string
 }
 interface ApiResult {
@@ -96,10 +96,10 @@ export default function InvitationAcceptApp() {
     <section className="invite-card">
       <a className="invite-brand" href="/"><span className="invite-brand-mark">M</span><span><strong>MURAMA</strong><small>DIGITAL SCHOOL</small></span></a>
       {loading ? <div className="invite-loading"><span className="invite-spinner" /><p>Verifying your secure invitation…</p></div>
-        : accepted ? <div className="invite-success"><span className="invite-success-mark">✓</span><span className="invite-eyebrow">ACCOUNT ACTIVATED</span><h1>Welcome to your school portal.</h1><p>Your account is active. Sign in using the email address provided by the school and the password you just created.</p><a className="invite-primary-link" href="/portal">Continue to student & parent portal</a></div>
+        : accepted ? <div className="invite-success"><span className="invite-success-mark">✓</span><span className="invite-eyebrow">ACCOUNT ACTIVATED</span><h1>Welcome to your school portal.</h1><p>Your account is active. Sign in using the email address provided by the school and the password you just created.</p><a className="invite-primary-link" href={invitation?.role === 'TEACHER' ? '/teacher' : '/portal'}>{invitation?.role === 'TEACHER' ? 'Continue to teacher workspace' : 'Continue to student & parent portal'}</a></div>
         : invitation ? <>
           <div className="invite-intro"><span className="invite-eyebrow">SECURE ACCOUNT SETUP</span><h1>Activate your school account.</h1><p>The school has invited you to access Murama Digital School. Create a password to finish setting up your account.</p></div>
-          <div className="invite-identity"><span className="invite-avatar">{invitation.firstName.slice(0, 1)}{invitation.lastName.slice(0, 1)}</span><div><strong>{invitation.firstName} {invitation.lastName}</strong><small>{invitation.email}</small></div><span className="invite-role">{invitation.role === 'PARENT' ? 'Parent' : 'Student'}</span></div>
+          <div className="invite-identity"><span className="invite-avatar">{invitation.firstName.slice(0, 1)}{invitation.lastName.slice(0, 1)}</span><div><strong>{invitation.firstName} {invitation.lastName}</strong><small>{invitation.email}</small></div><span className="invite-role">{invitation.role === 'PARENT' ? 'Parent' : invitation.role === 'TEACHER' ? 'Teacher' : 'Student'}</span></div>
           {error && <p className="invite-error" role="alert">{error}</p>}
           <form className="invite-form" onSubmit={acceptInvitation}>
             <label>Create password<input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={12} maxLength={128} required placeholder="At least 12 characters" /><small>Use a unique password that you do not use on another website.</small></label>
