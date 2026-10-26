@@ -66,5 +66,5 @@ test('parent children listing is scoped to the authenticated parent user ID', as
   const children = await listParentChildren(query, 9)
   assert.deepEqual(children, [{ studentId: 22, firstName: 'Aline' }])
   assert.deepEqual(calls[0]?.values, ['ACTIVE', 9])
-  assert.match(calls[0]?.sql ?? '', /WHERE p\.user_id = \?/
+  assert.match(calls[0]?.sql ?? '', /WHERE p\.user_id = \?/)
 })
