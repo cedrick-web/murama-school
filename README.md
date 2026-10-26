@@ -159,6 +159,11 @@ The migrations `supabase/migrations/20261026170532_profiles_policy_and_invitatio
 
 The migration `supabase/migrations/20261026170628_media_visit_foreign_key_indexes.sql` adds indexes for the media uploader and visit-request handler foreign keys identified by the live Supabase performance advisor.
 
+
+## Production readiness probe
+
+Use `GET /api/health/ready` as the deployment readiness check. It returns HTTP 200 only when the database is reachable, `JWT_SECRET` meets the minimum length, and server-side Supabase media storage is configured. A degraded response identifies component names only and never returns secret values. Keep the existing `/api/health` and `/api/health/database` endpoints for liveness/database diagnostics. Before production rollout, run this probe against the actual Netlify runtime and verify the image/video upload lifecycle with a dedicated test account.
+
 ## Live data readiness
 
 The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.
