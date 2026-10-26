@@ -155,7 +155,7 @@ Before enabling media uploads, apply `supabase/migrations/20261026170134_school_
 
 ## Supabase security and invitation indexes
 
-The migration `supabase/migrations/20261026170532_profiles_policy_and_invitation_indexes.sql` restricts optional Google identity profiles to their own permanent Supabase Auth identity, explicitly excluding anonymous Auth sessions, and adds indexes for the invitation creator and linked-student foreign keys. School records remain server-accessed through the Express API; direct `anon` and `authenticated` table grants remain revoked for the school-management tables.
+The migrations `supabase/migrations/20261026170532_profiles_policy_and_invitation_indexes.sql` and `supabase/migrations/20261026170712_profiles_policy_initplan.sql` restrict optional Google identity profiles to their own permanent Supabase Auth identity, explicitly excluding anonymous Auth sessions, optimize policy claim lookups, and add indexes for the invitation creator and linked-student foreign keys. School records remain server-accessed through the Express API; direct `anon` and `authenticated` table grants remain revoked for the school-management tables.
 
 The migration `supabase/migrations/20261026170628_media_visit_foreign_key_indexes.sql` adds indexes for the media uploader and visit-request handler foreign keys identified by the live Supabase performance advisor.
 
