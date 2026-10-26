@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/server.js",
     "create-admin": "tsx src/scripts/create-admin.ts",
-    "test": "tsx --test src/config/sql-compat.test.ts src/middleware/rate-limit.test.ts src/middleware/auth.test.ts",
+    "test": "tsx --test src/config/sql-compat.test.ts src/middleware/rate-limit.test.ts src/middleware/auth.test.ts src/services/portal-access.test.ts",
     "migrate:mysql-to-supabase": "tsx src/scripts/migrate-mysql-to-supabase.ts"
   },
   "dependencies": {
