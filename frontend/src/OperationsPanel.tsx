@@ -35,7 +35,7 @@ interface Payment { id: number; receiptNumber: string; admissionNumber: string; 
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
 interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
 interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
-interface MediaItem { id: number; title: string; altText: string; description: string | null; category: string; mediaType: 'IMAGE' | 'VIDEO'; objectPath: string; publicUrl: string; mimeType: string; sizeBytes: number; status: 'UPLOADING' | 'READY' | 'PUBLISHED' | 'ARCHIVED'; publishedAt: string | null; createdAt: string }
+interface MediaItem { id: number; title: string; altText: string; description: string | null; category: string; mediaType: 'IMAGE' | 'VIDEO'; objectPath: string; publicUrl: string; mimeType: string; sizeBytes: number; status: 'UPLOADING' | 'READY' | 'PUBLISHED' | 'ARCHIVED'; publishedAt: string | null; createdAt: string; canComplete?: boolean }
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -231,11 +231,26 @@ function MediaModule({ token }: { token: string }) {
       setCategory('SCHOOL_LIFE')
       setFile(null)
     } catch (reason) {
-      setError(messageOf(reason))
+      const message = messageOf(reason)
       if (mediaId !== null) setNotice('If the file finished uploading, use the Uploading item below to retry verification or delete the incomplete record.')
       await load()
+      setError(message)
     } finally {
       setUploading(false)
+    }
+  }
+
+
+  async function retryVerify(item: MediaItem) {
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await finishUpload(item.id)
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -295,7 +310,7 @@ function MediaModule({ token }: { token: string }) {
     {!loading && media.length > 0 && <div className="media-admin-grid">{media.map((item) => <article className="media-admin-card" key={item.id}>
       <div className="media-admin-preview">{item.status === 'UPLOADING' ? <span>UPLOAD IN PROGRESS</span> : item.mediaType === 'VIDEO' ? <video controls preload="metadata"><source src={item.publicUrl} type={item.mimeType} /></video> : <img src={item.publicUrl} alt={item.altText || item.title} loading="lazy" />}</div>
       <div className="media-admin-card-body"><div className="media-admin-card-meta"><span>{item.mediaType} · {item.category.replace(/_/g, ' ')}</span><span className={'visit-admin-status status-' + item.status.toLowerCase()}>{item.status}</span></div><h4>{item.title}</h4>{item.description && <p>{item.description}</p>}<small>{fmtNumber(item.sizeBytes / 1024 / 1024)} MB · {shortDate(item.createdAt)}</small>
-        <div className="media-admin-actions">{item.status === 'READY' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish</button>}{item.status === 'PUBLISHED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'ARCHIVED')}>Archive</button>}{item.status === 'ARCHIVED' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish again</button>}{item.status !== 'UPLOADING' && item.status !== 'READY' && item.status !== 'PUBLISHED' && item.status !== 'ARCHIVED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'READY')}>Mark ready</button>}<button className="operations-button danger" type="button" disabled={busyId === item.id} onClick={() => void remove(item)}>{busyId === item.id ? 'Working…' : 'Delete'}</button></div>
+        <div className="media-admin-actions">{item.status === 'UPLOADING' && item.canComplete && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void retryVerify(item)}>Verify upload</button>}{item.status === 'READY' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish</button>}{item.status === 'PUBLISHED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'ARCHIVED')}>Archive</button>}{item.status === 'ARCHIVED' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish again</button>}{item.status !== 'UPLOADING' && item.status !== 'READY' && item.status !== 'PUBLISHED' && item.status !== 'ARCHIVED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'READY')}>Mark ready</button>}<button className="operations-button danger" type="button" disabled={busyId === item.id} onClick={() => void remove(item)}>{busyId === item.id ? 'Working…' : 'Delete'}</button></div>
       </div>
     </article>)}</div>}
   </section>
