@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import AdminApp from './AdminApp'
 import PortalApp from './PortalApp'
 import InvitationAcceptApp from './InvitationAcceptApp'
+import TeacherApp from './TeacherApp'
 import './tailwind.css'
 import './styles.css'
 
@@ -361,7 +362,7 @@ function App() {
 }
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : /^\/invite(?:\/|$)/.test(normalizedPath) ? InvitationAcceptApp : App
+const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : /^\/invite(?:\/|$)/.test(normalizedPath) ? InvitationAcceptApp : /^\/teacher(?:\/|$)/.test(normalizedPath) ? TeacherApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
