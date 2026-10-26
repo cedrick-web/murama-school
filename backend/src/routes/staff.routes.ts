@@ -66,13 +66,17 @@ router.get('/overview', async (req: AuthenticatedRequest, res) => {
           [userId],
         ),
         pool.execute(
-          'SELECT COUNT(DISTINCT e.student_id) AS studentCount FROM student_enrollments e WHERE e.enrollment_status = ? AND EXISTS (SELECT 1 FROM timetable_entries te WHERE te.teacher_id = ? AND te.class_id = e.class_id AND (te.stream_id IS NULL OR te.stream_id = e.stream_id) AND te.academic_year_id = e.academic_year_id AND (te.term_id IS NULL OR te.term_id = e.term_id))',
+          'SELECT COUNT(DISTINCT e.student_id) AS studentCount FROM student_enrollments e INNER JOIN teacher_subjects ts ON ts.class_id = e.class_id AND ts.academic_year_id = e.academic_year_id WHERE e.enrollment_status = ? AND ts.teacher_id = ?',
           ['ACTIVE', teacherId],
+        ),
+        pool.execute(
+          'SELECT COUNT(DISTINCT ts.class_id) AS classCount FROM teacher_subjects ts INNER JOIN academic_years ay ON ay.id = ts.academic_year_id WHERE ts.teacher_id = ? AND ay.is_current = TRUE',
+          [teacherId],
         ),
       ])
       const schedule = (scheduleRows[0] as Row[])[0] ?? {}
       teaching = {
-        assignedClasses: Number(schedule.classCount ?? 0),
+        assignedClasses: Number(((assignmentRows[0] as Row[])[0] ?? {}).classCount ?? 0),
         timetableEntries: Number(schedule.entryCount ?? 0),
         assessmentsCreated: Number(((assessmentRows[0] as Row[])[0] ?? {}).assessmentCount ?? 0),
         studentsInAssignedClasses: Number(((studentRows[0] as Row[])[0] ?? {}).studentCount ?? 0),
