@@ -66,7 +66,8 @@ function profileFor(user: {
 
 export async function startGoogleSignIn(): Promise<void> {
   const supabase = getSupabaseClient()
-  const redirectTo = new URL('/admin', window.location.origin).toString()
+  const callbackPath = window.location.pathname.startsWith('/portal') ? '/portal' : '/admin'
+  const redirectTo = new URL(callbackPath, window.location.origin).toString()
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -116,7 +117,8 @@ export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLo
 }
 
 export function cleanGoogleCallbackUrl(): void {
-  window.history.replaceState({}, document.title, '/admin')
+  const callbackPath = window.location.pathname.startsWith('/portal') ? '/portal' : '/admin'
+  window.history.replaceState({}, document.title, callbackPath)
 }
 
 export function getGoogleCallbackError(): string | null {
