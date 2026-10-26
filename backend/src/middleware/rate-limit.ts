@@ -100,6 +100,8 @@ export function createDatabaseRateLimiter(
   maxRequests: number,
   scope: string,
   increment: RateLimitIncrement = incrementSharedBucket,
+  limitMessage = 'Too many sign-in attempts. Please wait before trying again.',
+  unavailableMessage = 'Authentication is temporarily unavailable. Please try again shortly.',
 ): RequestHandler {
   return (req, res, next) => {
     const clientAddress = req.ip || req.socket.remoteAddress || 'unknown'
@@ -116,7 +118,7 @@ export function createDatabaseRateLimiter(
         res.setHeader('Retry-After', String(retryAfter))
         res.status(429).json({
           success: false,
-          message: 'Too many sign-in attempts. Please wait before trying again.',
+          message: limitMessage,
         })
         return
       }
@@ -125,7 +127,7 @@ export function createDatabaseRateLimiter(
       console.error('Shared rate-limit store unavailable', error)
       res.status(503).json({
         success: false,
-        message: 'Authentication is temporarily unavailable. Please try again shortly.',
+        message: unavailableMessage,
       })
     })
   }
