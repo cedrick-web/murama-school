@@ -1,7 +1,7 @@
 import { Router } from 'express'
 
 import { isDatabaseUnavailable, pool } from '../config/database.js'
-import { createRateLimiter } from '../middleware/rate-limit.js'
+import { createDatabaseRateLimiter } from '../middleware/rate-limit.js'
 import { validateVisitRequest } from '../services/visit-request-policy.js'
 import { createSignedMediaReadUrl, StorageConfigurationError, StorageServiceError } from '../services/supabase-storage.service.js'
 
@@ -92,7 +92,7 @@ router.get('/media', async (_req, res) => {
   }
 })
 
-const visitRequestRateLimit = createRateLimiter(15 * 60 * 1000, 5)
+const visitRequestRateLimit = createDatabaseRateLimiter(15 * 60 * 1000, 5, 'school-visit-requests', undefined, 'Too many school visit requests. Please wait before trying again.', 'School visit requests are temporarily unavailable. Please try again shortly.')
 
 router.post('/visits', visitRequestRateLimit, async (req, res) => {
   const visit = validateVisitRequest(req.body ?? {})
