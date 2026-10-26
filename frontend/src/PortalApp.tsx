@@ -318,12 +318,14 @@ export default function PortalApp() {
     setError('')
   }
 
+  const requestedPortalRole = window.location.pathname.startsWith('/portal/parent') ? 'PARENT' : window.location.pathname.startsWith('/portal/student') ? 'STUDENT' : null
+
   if (authChecking) return <main className="portal-loading"><div className="portal-spinner" /><p>Checking your secure school session…</p></main>
 
   if (!token || !user) return <main className="portal-auth-shell">
     <section className="portal-auth-card">
       <a className="portal-brand" href="/"><span className="portal-brand-mark">M</span><span><strong>MURAMA</strong><small>DIGITAL SCHOOL</small></span></a>
-      <div className="portal-auth-intro"><span className="portal-eyebrow">STUDENT & FAMILY SERVICES</span><h1>Your school, connected.</h1><p>Access school progress, attendance, timetables, fees and official messages in one secure place.</p></div>
+      <div className="portal-auth-intro"><span className="portal-eyebrow">{requestedPortalRole === 'PARENT' ? 'PARENT & GUARDIAN PORTAL' : requestedPortalRole === 'STUDENT' ? 'STUDENT LEARNING PORTAL' : 'STUDENT & FAMILY SERVICES'}</span><h1>{requestedPortalRole === 'PARENT' ? 'Stay close to your child’s school journey.' : requestedPortalRole === 'STUDENT' ? 'Your learning, in one place.' : 'Your school, connected.'}</h1><p>{requestedPortalRole === 'PARENT' ? 'Follow linked children’s results, attendance, timetables, fee balances and official school messages.' : requestedPortalRole === 'STUDENT' ? 'Check your published results, attendance, class timetable, fees and messages from the school.' : 'Access school progress, attendance, timetables, fees and official messages in one secure place.'}</p></div>
       {authError && <p className="portal-alert" role="alert">{authError}</p>}
       <form className="portal-login-form" onSubmit={handleLogin}>
         <label>Email address<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="you@example.com" /></label>
