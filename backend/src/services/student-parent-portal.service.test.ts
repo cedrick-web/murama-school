@@ -57,9 +57,9 @@ test('staff roles cannot resolve student or parent records through portal servic
 })
 
 test('parent children listing is scoped to the authenticated parent user ID', async () => {
-  let call: { sql: string; values: unknown[] } | null = null
+  const calls: Array<{ sql: string; values: unknown[] }> = []
   const query = async (sql: string, values: unknown[]) => {
-    call = { sql, values }
+    calls.push({ sql, values })
     return [[{ studentId: 22, firstName: 'Aline' }], []]
   }
 
