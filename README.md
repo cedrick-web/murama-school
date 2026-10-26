@@ -118,7 +118,7 @@ The administrator workspace can create a one-time invitation for an existing **i
 
 Before using this workflow against Supabase:
 
-1. Apply the migration `supabase/migrations/20261026190000_account_invitations.sql` to the target database using the project's reviewed Supabase migration workflow.
+1. Apply the migration `supabase/migrations/20261026162842_account_invitations.sql` to the target database using the project's reviewed Supabase migration workflow.
 2. Ensure `FRONTEND_URL` is set to the canonical frontend origin (for example, the production Netlify URL). Invitation links use this origin.
 3. In the admin workspace, open **Users**, select an eligible inactive student/parent account, and create the invitation. Parent invitations also require a linked student and relationship.
 4. Copy the returned link and deliver it privately to the intended account holder. The raw token is not stored or shown again; issuing a replacement revokes older pending invitations for that account.
