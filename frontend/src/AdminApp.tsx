@@ -3,9 +3,11 @@ import AcademicPanel from './AcademicPanel'
 import StudentsPanel from './StudentsPanel'
 import DashboardPanel from './DashboardPanel'
 import OperationsPanel from './OperationsPanel'
+import PeoplePanel from './PeoplePanel'
 import './admin.css'
 import './admin-modern.css'
 import './invitation-admin.css'
+import './people-management.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =
@@ -107,7 +109,7 @@ interface AuditLog {
   actor: string | null
 }
 
-type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'operations' | 'settings' | 'announcements' | 'activity'
+type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'people' | 'operations' | 'settings' | 'announcements' | 'activity'
 
 const roles: UserRole[] = [
   'ADMIN',
@@ -170,6 +172,9 @@ function WorkspaceIcon({ name }: { name: AdminSection }) {
     case 'users':
       paths = <><circle cx="9" cy="8" r="3"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><path d="M16 5.3a3 3 0 0 1 0 5.8M18 14.2a4.5 4.5 0 0 1 3 4.3V20"/></>
       break
+    case 'people':
+      paths = <><circle cx="9" cy="8" r="3"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><circle cx="17" cy="8" r="2.5"/><path d="M17 14a4 4 0 0 1 4 4v2"/></>
+      break
     case 'students':
       paths = <><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M6 11v5c3.5 3 8.5 3 12 0v-5M21 9v6"/></>
       break
@@ -196,6 +201,7 @@ const sectionDetails: Record<AdminSection, { title: string; description: string 
   dashboard: { title: 'Overview', description: 'Live operational snapshot of the school system.' },
   users: { title: 'Users & access', description: 'Manage school accounts, roles and account status.' },
   students: { title: 'Students & enrollment', description: 'Maintain student records and class enrollment.' },
+  people: { title: 'Parents, teachers & assignments', description: 'Create parent and teacher records, then assign teachers to classes, subjects and academic years.' },
   academics: { title: 'Academic structure', description: 'Configure academic years, terms, classes, streams and subjects.' },
   operations: { title: 'School operations', description: 'Manage attendance registers, assessments, timetable, fees and school communication.' },
   announcements: { title: 'Announcements', description: 'Publish and manage communication for the school community.' },
@@ -208,6 +214,7 @@ const sectionPaths: Record<AdminSection, string> = {
   users: '/admin/users',
   academics: '/admin/academics/years',
   students: '/admin/students/roster',
+  people: '/admin/people',
   operations: '/admin/operations/attendance',
   settings: '/admin/settings',
   announcements: '/admin/announcements',
@@ -627,6 +634,7 @@ export default function AdminApp() {
             ['students', 'Students & enrollment'],
             ['academics', 'Academic structure'],
             ['users', 'Users & access'],
+            ['people', 'Parents, teachers & assignments'],
           ] as const).map(([value, label]) => (
             <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { navigateSection(value) }}>
               <WorkspaceIcon name={value} /><span>{label}</span>
@@ -694,7 +702,7 @@ export default function AdminApp() {
               </div>
               <section className="admin-table-card invitation-create-card" aria-labelledby="invitations-create-heading">
                 <div className="admin-table-heading">
-                  <div><h2 id="invitations-create-heading">Secure account invitations</h2><p>Activate existing inactive student and parent accounts with a one-time link. No password is sent or stored in the link.</p></div>
+                  <div><h2 id="invitations-create-heading">Secure account invitations</h2><p>Activate existing inactive student, parent and teacher accounts with a one-time link. No password is sent or stored in the link.</p></div>
                   {loadingInvitations && <span className="admin-muted" aria-live="polite">Loading invitations…</span>}
                 </div>
                 <form className="invitation-create-form" onSubmit={createInvitation}>
@@ -720,7 +728,7 @@ export default function AdminApp() {
                 {invitationError && <p className="admin-alert invitation-feedback" role="alert">{invitationError}</p>}
                 {invitationMessage && <p className="invitation-feedback invitation-feedback-success" role="status">{invitationMessage}</p>}
                 {invitationUrl && <div className="invitation-link-output"><label>One-time invitation link<input readOnly value={invitationUrl} onFocus={(event) => event.currentTarget.select()} /></label><button className="admin-quiet-button" type="button" onClick={() => void copyInvitationLink()}>Copy link</button></div>}
-                {!invitationCandidates.length && <p className="admin-muted invitation-empty-note">There are no eligible inactive student or parent accounts with email addresses. Create the school record first, then issue an invitation.</p>}
+                {!invitationCandidates.length && <p className="admin-muted invitation-empty-note">There are no eligible inactive student, parent or teacher accounts with email addresses. Create the school record first, then issue an invitation.</p>}
               </section>
 
               <section className="admin-table-card invitation-history-card" aria-labelledby="invitation-history-heading">
@@ -776,6 +784,7 @@ export default function AdminApp() {
           {section === 'settings' && token && <SettingsPanel token={token} />}
           {section === 'academics' && token && <AcademicPanel token={token} />}
           {section === 'students' && token && <StudentsPanel token={token} />}
+          {section === 'people' && token && <PeoplePanel token={token} />}
           {section === 'operations' && token && <OperationsPanel token={token} />}
           {section === 'announcements' && token && <AnnouncementsPanel token={token} />}
           {section === 'activity' && token && <ActivityPanel token={token} />}
