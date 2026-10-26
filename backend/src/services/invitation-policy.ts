@@ -13,5 +13,5 @@ export function isInvitationUsable(invitation: InvitationState, now = Date.now()
     && Number.isFinite(expiry)
     && expiry > now
     && !Boolean(invitation.isActive)
-    && ['STUDENT', 'PARENT'].includes(String(invitation.role))
+    && ['STUDENT', 'PARENT', 'TEACHER'].includes(String(invitation.role))
 }
