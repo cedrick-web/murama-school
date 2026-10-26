@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import publicRoutes from './routes/public.routes.js'
 import portalRoutes from './routes/portal.routes.js'
+import invitationRoutes from './routes/invitation.routes.js'
 
 dotenv.config()
 
@@ -23,6 +24,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/portal', portalRoutes)
+app.use('/api/invitations', invitationRoutes)
 
 app.get('/', (_req, res) => {
   res.json({

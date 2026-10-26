@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
@@ -118,6 +119,184 @@ router.get('/users', async (_req, res) => {
     res.json({ success: true, users: rows })
   } catch (error) {
     fail(res, 'load users', error)
+  }
+})
+
+router.get('/invitations', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT i.id, u.email, u.first_name AS firstName, u.last_name AS lastName, r.name AS role, i.expires_at AS expiresAt, i.accepted_at AS acceptedAt, i.revoked_at AS revokedAt, i.created_at AS createdAt, CONCAT_WS(' ', inviter.first_name, inviter.last_name) AS invitedBy, s.admission_number AS linkedAdmissionNumber, i.relationship FROM account_invitations i INNER JOIN users u ON u.id = i.user_id INNER JOIN roles r ON r.id = u.role_id INNER JOIN users inviter ON inviter.id = i.invited_by LEFT JOIN students s ON s.id = i.linked_student_id ORDER BY i.created_at DESC LIMIT 100",
+    )
+    res.json({ success: true, invitations: rows })
+  } catch (error) {
+    fail(res, 'load invitations', error)
+  }
+})
+
+router.post('/invitations', async (req: AuthenticatedRequest, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+  const rawStudentId = req.body?.studentId
+  const studentId = typeof rawStudentId === 'number' && Number.isSafeInteger(rawStudentId) && rawStudentId > 0
+    ? rawStudentId
+    : typeof rawStudentId === 'string'
+      ? parseUserId(rawStudentId)
+      : null
+  const relationship = typeof req.body?.relationship === 'string'
+    ? req.body.relationship.trim().slice(0, 50)
+    : ''
+  const rawHours = req.body?.expiresInHours
+  const expiresInHours = rawHours === undefined ? 48 : Number(rawHours)
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ success: false, message: 'Provide a valid email address for an existing inactive school account' })
+    return
+  }
+  if (!Number.isInteger(expiresInHours) || expiresInHours < 1 || expiresInHours > 168) {
+    res.status(400).json({ success: false, message: 'Invitation expiry must be between 1 and 168 hours' })
+    return
+  }
+
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(process.env.FRONTEND_URL?.trim() || 'http://localhost:5173')
+  } catch {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must be a valid absolute URL' })
+    return
+  }
+  if (!['http:', 'https:'].includes(baseUrl.protocol)) {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must use HTTP or HTTPS' })
+    return
+  }
+
+  const token = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [userRows] = await connection.execute(
+        'SELECT u.id, u.email, u.is_active AS isActive, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE LOWER(u.email) = ? LIMIT 1 FOR UPDATE',
+        [email],
+      )
+      const target = (userRows as Record<string, unknown>[])[0]
+      if (!target) return { ok: false as const, status: 404, message: 'No school account exists for this email' }
+      if (Boolean(target.isActive)) return { ok: false as const, status: 409, message: 'This school account is already active' }
+      if (!['STUDENT', 'PARENT'].includes(String(target.role))) {
+        return { ok: false as const, status: 409, message: 'Invitations currently support existing student and parent accounts only' }
+      }
+
+      let linkedStudentId: number | null = null
+      let parentRelationship: string | null = null
+      if (target.role === 'STUDENT') {
+        if (studentId !== null || relationship) {
+          return { ok: false as const, status: 400, message: 'Student invitations do not accept parent-link fields' }
+        }
+        const [studentRows] = await connection.execute(
+          'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(studentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The student account is not linked to a student record' }
+        }
+      } else {
+        if (!studentId || relationship.length < 2) {
+          return { ok: false as const, status: 400, message: 'Parent invitations require a linked student ID and relationship' }
+        }
+        const [parentRows] = await connection.execute(
+          'SELECT id FROM parents WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(parentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The parent account is not linked to a parent record' }
+        }
+        const [studentRows] = await connection.execute(
+          'SELECT id FROM students WHERE id = ? LIMIT 1',
+          [studentId],
+        )
+        if (!(studentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 404, message: 'The selected student record was not found' }
+        }
+        linkedStudentId = studentId
+        parentRelationship = relationship
+      }
+
+      await connection.execute(
+        'UPDATE account_invitations SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL',
+        [Number(target.id)],
+      )
+      const [insertResult] = await connection.execute(
+        'INSERT INTO account_invitations (user_id, invited_by, token_hash, linked_student_id, relationship, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [Number(target.id), req.user!.id, tokenHash, linkedStudentId, parentRelationship, expiresAt.toISOString()],
+      )
+      const invitationId = Number((insertResult as { insertId: number }).insertId)
+      await writeAuditLog(connection, req, 'ACCOUNT_INVITATION_CREATED', 'account_invitation', invitationId, {
+        targetUserId: Number(target.id),
+        role: String(target.role),
+        expiresAt: expiresAt.toISOString(),
+        linkedStudentId,
+      })
+      return {
+        ok: true as const,
+        status: 201,
+        message: 'Invitation created',
+        invitationId,
+        email: String(target.email),
+        role: String(target.role),
+      }
+    })
+
+    if (!result.ok) {
+      res.status(result.status).json({ success: false, message: result.message })
+      return
+    }
+
+    const invitationUrl = new URL('/invite', baseUrl.origin)
+    invitationUrl.hash = new URLSearchParams({ token }).toString()
+    res.status(201).json({
+      success: true,
+      invitation: {
+        id: result.invitationId,
+        email: result.email,
+        role: result.role,
+        expiresAt: expiresAt.toISOString(),
+        invitationUrl: invitationUrl.toString(),
+      },
+      message: 'Invitation created. Copy and share this one-time link securely; the raw token is not stored.',
+    })
+  } catch (error) {
+    fail(res, 'create account invitation', error)
+  }
+})
+
+router.patch('/invitations/:invitationId/revoke', async (req: AuthenticatedRequest, res) => {
+  const invitationId = parseUserId(req.params.invitationId)
+  if (!invitationId) {
+    res.status(400).json({ success: false, message: 'A valid invitation ID is required' })
+    return
+  }
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, user_id AS userId, accepted_at AS acceptedAt, revoked_at AS revokedAt FROM account_invitations WHERE id = ? FOR UPDATE',
+        [invitationId],
+      )
+      const invitation = (rows as Record<string, unknown>[])[0]
+      if (!invitation) return { status: 404, message: 'Invitation not found' }
+      if (invitation.acceptedAt) return { status: 409, message: 'An accepted invitation cannot be revoked' }
+      if (invitation.revokedAt) return { status: 200, message: 'Invitation is already revoked' }
+      await connection.execute(
+        'UPDATE account_invitations SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [invitationId],
+      )
+      await writeAuditLog(connection, req, 'ACCOUNT_INVITATION_REVOKED', 'account_invitation', invitationId, {
+        targetUserId: Number(invitation.userId),
+      })
+      return { status: 200, message: 'Invitation revoked' }
+    })
+    res.status(result.status).json({ success: result.status < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'revoke account invitation', error)
   }
 })
 
