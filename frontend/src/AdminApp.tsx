@@ -370,6 +370,26 @@ export default function AdminApp() {
     }
   }, [status, token])
 
+  useEffect(() => {
+    if (status !== 'ready' || !token) return
+    let active = true
+    setLoadingInvitations(true)
+    Promise.all([
+      request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token),
+      request<{ students: InvitationStudent[] }>('/api/admin/people/students', token),
+    ])
+      .then(([invitationResult, studentResult]) => {
+        if (!active) return
+        setInvitations(invitationResult.invitations)
+        setInvitationStudents(studentResult.students)
+      })
+      .catch((reason: unknown) => {
+        if (active) setInvitationError(reason instanceof Error ? reason.message : 'Unable to load invitation records')
+      })
+      .finally(() => { if (active) setLoadingInvitations(false) })
+    return () => { active = false }
+  }, [status, token])
+
   function signOut() {
     sessionStorage.removeItem(tokenKey)
     setToken(null)
