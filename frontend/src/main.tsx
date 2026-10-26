@@ -4,6 +4,7 @@ import AdminApp from './AdminApp'
 import PortalApp from './PortalApp'
 import InvitationAcceptApp from './InvitationAcceptApp'
 import TeacherApp from './TeacherApp'
+import VisitRequestForm from './VisitRequestForm'
 import StaffPortalApp from './StaffPortalApp'
 import './tailwind.css'
 import './styles.css'
@@ -335,6 +336,8 @@ function App() {
             </div>
           )}
         </section>
+
+        <VisitRequestForm language={language} />
 
         <section className="public-contact-section" id="contact">
           <div className="contact-section-copy">
