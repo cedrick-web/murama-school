@@ -32,12 +32,46 @@ interface AdminUser extends AuthUser {
 interface ApiResponse {
   success?: boolean
   message?: string
+  invitation?: CreatedInvitation
+  invitations?: AccountInvitation[]
+  students?: InvitationStudent[]
   token?: string
   user?: AuthUser
   users?: AdminUser[]
   settings?: SchoolSettings
   announcements?: Announcement[]
   logs?: AuditLog[]
+}
+
+interface CreatedInvitation {
+  id: number
+  email: string
+  role: 'STUDENT' | 'PARENT'
+  expiresAt: string
+  invitationUrl: string
+}
+interface AccountInvitation {
+  id: number
+  email: string
+  firstName: string
+  lastName: string
+  role: 'STUDENT' | 'PARENT'
+  expiresAt: string
+  acceptedAt: string | null
+  revokedAt: string | null
+  createdAt: string
+  invitedBy: string
+  linkedAdmissionNumber: string | null
+  relationship: string | null
+}
+interface InvitationStudent {
+  id: number
+  admissionNumber: string
+  firstName: string
+  lastName: string
+  status: string
+  className: string | null
+  streamName: string | null
 }
 
 interface SchoolSettings {
@@ -205,6 +239,17 @@ export default function AdminApp() {
   const [error, setError] = useState('')
   const [oauthBusy, setOauthBusy] = useState(false)
   const [oauthProcessing, setOauthProcessing] = useState(() => hasGoogleCallback())
+  const [invitationEmail, setInvitationEmail] = useState('')
+  const [invitationStudentId, setInvitationStudentId] = useState('')
+  const [invitationRelationship, setInvitationRelationship] = useState('Parent/Guardian')
+  const [invitationUrl, setInvitationUrl] = useState('')
+  const [invitationBusy, setInvitationBusy] = useState(false)
+  const [invitationMessage, setInvitationMessage] = useState('')
+  const [invitationError, setInvitationError] = useState('')
+  const [invitations, setInvitations] = useState<AccountInvitation[]>([])
+  const [invitationStudents, setInvitationStudents] = useState<InvitationStudent[]>([])
+  const [loadingInvitations, setLoadingInvitations] = useState(false)
+  const [revokingInvitationId, setRevokingInvitationId] = useState<number | null>(null)
 
   useEffect(() => {
     const handleRouteChange = () => {
