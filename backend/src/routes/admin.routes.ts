@@ -9,7 +9,7 @@ import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
-import { ALLOWED_MEDIA_TYPES, MAX_MEDIA_BYTES, createSignedMediaUpload, deleteStoredMedia, publicMediaUrl, StorageConfigurationError, StorageServiceError, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { ALLOWED_MEDIA_TYPES, MAX_MEDIA_BYTES, createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, verifyUploadedMedia } from '../services/supabase-storage.service.js'
 
 const router = Router()
 const validRoles: UserRole[] = [
@@ -704,11 +704,23 @@ router.get('/media', async (req, res) => {
   }
   try {
     const [rows] = await pool.execute(
-      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, public_url AS publicUrl, mime_type AS mimeType, size_bytes AS sizeBytes, status, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
+      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
       [status, status],
     )
-    res.json({ success: true, media: rows })
+    const media = await Promise.all((rows as Record<string, unknown>[]).map(async (item) => ({
+      ...item,
+      publicUrl: item.status === 'UPLOADING' ? null : await createSignedMediaReadUrl(String(item.objectPath)),
+    })))
+    res.json({ success: true, media })
   } catch (error) {
+    if (error instanceof StorageConfigurationError) {
+      res.status(503).json({ success: false, message: 'School media storage is not configured on the server yet.' })
+      return
+    }
+    if (error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to create secure preview URLs for school media.' })
+      return
+    }
     fail(res, 'load school media', error)
   }
 })
@@ -743,8 +755,8 @@ router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
   let mediaId: number | null = null
   try {
     const [insertResult] = await pool.execute(
-      'INSERT INTO school_media_items (title, alt_text, description, category, media_type, object_path, public_url, mime_type, size_bytes, status, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, altText, description, category, mediaType, objectPath, publicMediaUrl(objectPath), mimeType, sizeBytes, 'UPLOADING', req.user!.id],
+      'INSERT INTO school_media_items (title, alt_text, description, category, media_type, object_path, mime_type, size_bytes, status, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, altText, description, category, mediaType, objectPath, mimeType, sizeBytes, 'UPLOADING', req.user!.id],
     )
     mediaId = Number((insertResult as { insertId: number }).insertId)
     const uploadToken = await createSignedMediaUpload(objectPath)
@@ -755,7 +767,6 @@ router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
         objectPath,
         uploadToken,
         mediaType,
-        publicUrl: publicMediaUrl(objectPath),
         expiresInSeconds: 7200,
       },
       message: 'Upload token created. Complete the upload to save the media item for review.',
