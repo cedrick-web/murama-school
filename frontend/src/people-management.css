@@ -1,0 +1,19 @@
+.people-admin { display: grid; gap: 17px; }
+.people-admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px; border: 1px solid #e0e9e3; border-radius: 11px; background: #f5f8f6; }
+.people-admin-tabs button { display: inline-flex; align-items: center; gap: 9px; min-height: 39px; padding: 9px 13px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #587067; font: inherit; font-size: 11px; font-weight: 750; }
+.people-admin-tabs button span { display: inline-grid; min-width: 21px; height: 21px; place-items: center; padding: 0 5px; border-radius: 100px; background: #e6eee9; color: #49685a; font-size: 10px; }
+.people-admin-tabs button.is-active { border-color: #d0e5d8; background: #fff; color: #1c664a; box-shadow: 0 2px 6px #143e2908; }
+.people-admin-tabs button.is-active span { background: #e0f3e7; color: #176b4a; }
+.people-success { margin: 0; padding: 11px 13px; border: 1px solid #d0e8d7; border-radius: 9px; background: #f2faf4; color: #276b4b; font-size: 12px; line-height: 1.6; }
+.people-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.people-form-grid label { display: grid; min-width: 0; gap: 7px; color: #52665d; font-size: 11px; font-weight: 750; }
+.people-form-grid input, .people-form-grid select { width: 100%; min-width: 0; min-height: 40px; padding: 10px 11px; border: 1px solid #dce6df; border-radius: 8px; outline: none; background: #fff; color: #203f33; font: inherit; font-size: 12px; }
+.people-form-grid input:focus, .people-form-grid select:focus { border-color: #60a783; box-shadow: 0 0 0 3px #e3f3e9; }
+.people-submit { min-height: 40px; white-space: nowrap; }
+.assignment-form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; }
+.people-admin .admin-table-card { margin-bottom: 0; }
+.people-admin .admin-table-scroll table { min-width: 720px; }
+.people-admin .admin-table-scroll td { vertical-align: middle; }
+.people-admin .admin-table-scroll td small { display: block; margin-top: 4px; }
+@media (max-width: 1050px) { .people-form-grid, .assignment-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .people-submit { justify-self: start; } }
+@media (max-width: 640px) { .people-form-grid, .assignment-form-grid { grid-template-columns: 1fr; } .people-admin-tabs { display: grid; grid-template-columns: 1fr; } .people-admin-tabs button { justify-content: space-between; } }
