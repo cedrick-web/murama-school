@@ -4,6 +4,7 @@ import AdminApp from './AdminApp'
 import PortalApp from './PortalApp'
 import InvitationAcceptApp from './InvitationAcceptApp'
 import TeacherApp from './TeacherApp'
+import StaffPortalApp from './StaffPortalApp'
 import './tailwind.css'
 import './styles.css'
 
@@ -363,7 +364,7 @@ function App() {
 }
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : /^\/invite(?:\/|$)/.test(normalizedPath) ? InvitationAcceptApp : /^\/teacher(?:\/|$)/.test(normalizedPath) ? TeacherApp : App
+const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : /^\/invite(?:\/|$)/.test(normalizedPath) ? InvitationAcceptApp : /^\/teacher(?:\/|$)/.test(normalizedPath) ? TeacherApp : /^\/staff(?:\/|$)/.test(normalizedPath) ? StaffPortalApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
