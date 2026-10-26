@@ -114,13 +114,22 @@ export default function PortalApp() {
   const [authError, setAuthError] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [googleBusy, setGoogleBusy] = useState(false)
-  const [section, setSection] = useState<PortalSection>('overview')
+  const [section, setSection] = useState<PortalSection>(() => {\n    const segment = window.location.pathname.split('/').filter(Boolean).pop()\n    return segment && Object.hasOwn(sectionLabels, segment) ? segment as PortalSection : 'overview'\n  })
   const [children, setChildren] = useState<RecordRow[]>([])
   const [selectedChildId, setSelectedChildId] = useState('')
   const [data, setData] = useState<ApiEnvelope | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      const segment = window.location.pathname.split('/').filter(Boolean).pop()
+      setSection(segment && Object.hasOwn(sectionLabels, segment) ? segment as PortalSection : 'overview')
+    }
+    window.addEventListener('popstate', handleRouteChange)
+    return () => window.removeEventListener('popstate', handleRouteChange)
+  }, [])
 
   const signOut = useCallback(() => {
     sessionStorage.removeItem(tokenKey)
