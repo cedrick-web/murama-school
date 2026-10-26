@@ -1,6 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AdminApp from './AdminApp'
+import PortalApp from './PortalApp'
 import './tailwind.css'
 import './styles.css'
 
@@ -358,7 +359,7 @@ function App() {
 }
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : App
+const RootApp = /^\\/admin(?:\\/|$)/.test(normalizedPath) ? AdminApp : /^\\/portal(?:\\/|$)/.test(normalizedPath) ? PortalApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
