@@ -138,7 +138,7 @@ router.get('/timetable', async (req: AuthenticatedRequest, res) => {
 })
 
 router.get('/classes', async (req: AuthenticatedRequest, res) => {
-  if (!['TEACHER', 'HEADTEACHER'].includes(req.user!.role)) {
+  if (req.user!.role !== 'HEADTEACHER') {
     res.status(403).json({
       success: false,
       message: 'Teaching class access is available to the headteacher workspace only',
