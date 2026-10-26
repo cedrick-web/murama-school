@@ -696,7 +696,7 @@ function mediaExtension(mimeType: string): string {
   return extensions[mimeType] ?? ''
 }
 
-router.get('/media', async (req, res) => {
+router.get('/media', async (req: AuthenticatedRequest, res) => {
   const status = req.query.status === undefined ? null : String(req.query.status).trim().toUpperCase()
   if (status !== null && !['UPLOADING', 'READY', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
     res.status(400).json({ success: false, message: 'Invalid media status filter' })
@@ -704,12 +704,13 @@ router.get('/media', async (req, res) => {
   }
   try {
     const [rows] = await pool.execute(
-      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
+      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, uploaded_by AS uploadedBy, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
       [status, status],
     )
     const media = await Promise.all((rows as Record<string, unknown>[]).map(async (item) => ({
       ...item,
       publicUrl: item.status === 'UPLOADING' ? null : await createSignedMediaReadUrl(String(item.objectPath)),
+      canComplete: Number(item.uploadedBy) === req.user!.id,
     })))
     res.json({ success: true, media })
   } catch (error) {
