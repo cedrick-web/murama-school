@@ -5,6 +5,7 @@ import DashboardPanel from './DashboardPanel'
 import OperationsPanel from './OperationsPanel'
 import './admin.css'
 import './admin-modern.css'
+import './invitation-admin.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =
