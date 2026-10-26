@@ -186,11 +186,7 @@ async function main(): Promise<void> {
           const quotedColumns = columns.map(quoteIdentifier)
           const rowPlaceholders = rows.map((_row, rowIndex) => {
             const slots = columns.map((_column, columnIndex) => (
-              'main().catch((error: unknown) => {
-  console.error('MySQL → Supabase migration failed:', error instanceof Error ? error.message : error)
-  process.exitCode = 1
-})
- + (rowIndex * columns.length + columnIndex + 1)
+              '$' + (rowIndex * columns.length + columnIndex + 1)
             ))
             return '(' + slots.join(', ') + ')'
           })
