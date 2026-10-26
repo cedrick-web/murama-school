@@ -442,7 +442,7 @@ export default function TeacherApp() {
   const classAssignments = assignments.filter((item) => item.classId === Number(selectedClassId))
   const availableSubjects = assignments.filter((item) => item.classId === Number(newAssessment.classId))
   const selectedAssignment = assignments.find((item) => item.classId === Number(selectedClassId))
-  const rosterRows = students.map((student) => ({ ...student, fullName: student.firstName + ' ' + student.lastName }))
+  const rosterRows = students.map((student) => ({ ...student, fullName: student.firstName + ' ' + student.lastName })) as unknown as ApiRecord[]
   const teacherAssessmentRows = assessments.map((assessment) => ({ ...assessment, markedCount: assessment.markedCount + ' marked' } as unknown as ApiRecord))
 
   return <div className="portal-app">
