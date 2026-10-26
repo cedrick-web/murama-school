@@ -56,9 +56,9 @@ router.get('/overview', async (req: AuthenticatedRequest, res) => {
 
     if (teacher && role === 'HEADTEACHER') {
       const teacherId = Number(teacher.id)
-      const [scheduleRows, assessmentRows, studentRows] = await Promise.all([
+      const [scheduleRows, assessmentRows, studentRows, assignmentRows] = await Promise.all([
         pool.execute(
-          'SELECT COUNT(*) AS entryCount, COUNT(DISTINCT class_id) AS classCount FROM timetable_entries WHERE teacher_id = ? AND (term_id IS NULL OR term_id IN (SELECT id FROM terms WHERE academic_year_id = timetable_entries.academic_year_id))',
+          'SELECT COUNT(*) AS entryCount FROM timetable_entries WHERE teacher_id = ? AND (term_id IS NULL OR term_id IN (SELECT id FROM terms WHERE academic_year_id = timetable_entries.academic_year_id))',
           [teacherId],
         ),
         pool.execute(
@@ -144,7 +144,7 @@ router.get('/classes', async (req: AuthenticatedRequest, res) => {
 
   try {
     const [rows] = await pool.execute(
-      'SELECT DISTINCT c.id AS classId, c.name AS className, st.id AS streamId, st.name AS streamName, ay.id AS academicYearId, ay.name AS academicYearName, COUNT(DISTINCT e.student_id) AS activeStudents, COUNT(DISTINCT te.id) AS timetableEntries FROM teachers tr INNER JOIN timetable_entries te ON te.teacher_id = tr.id INNER JOIN classes c ON c.id = te.class_id LEFT JOIN streams st ON st.id = te.stream_id INNER JOIN academic_years ay ON ay.id = te.academic_year_id LEFT JOIN student_enrollments e ON e.class_id = te.class_id AND (te.stream_id IS NULL OR e.stream_id = te.stream_id) AND e.academic_year_id = te.academic_year_id AND (e.term_id = te.term_id OR te.term_id IS NULL) AND e.enrollment_status = ? WHERE tr.user_id = ? GROUP BY c.id, c.name, st.id, st.name, ay.id, ay.name ORDER BY ay.name DESC, c.name, st.name',
+      'SELECT ts.class_id AS classId, c.name AS className, ts.subject_id AS subjectId, sub.name AS subjectName, ay.id AS academicYearId, ay.name AS academicYearName, COUNT(DISTINCT e.student_id) AS activeStudents, COUNT(DISTINCT te.id) AS timetableEntries FROM teachers tr INNER JOIN teacher_subjects ts ON ts.teacher_id = tr.id INNER JOIN classes c ON c.id = ts.class_id INNER JOIN subjects sub ON sub.id = ts.subject_id INNER JOIN academic_years ay ON ay.id = ts.academic_year_id LEFT JOIN student_enrollments e ON e.class_id = ts.class_id AND e.academic_year_id = ts.academic_year_id AND e.enrollment_status = ? LEFT JOIN timetable_entries te ON te.teacher_id = tr.id AND te.class_id = ts.class_id AND te.subject_id = ts.subject_id AND te.academic_year_id = ts.academic_year_id WHERE tr.user_id = ? AND ay.is_current = TRUE GROUP BY ts.class_id, c.name, ts.subject_id, sub.name, ay.id, ay.name ORDER BY ay.name DESC, c.name, sub.name',
       ['ACTIVE', req.user!.id],
     )
     res.json({ success: true, classes: rows })
