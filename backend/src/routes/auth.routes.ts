@@ -12,7 +12,7 @@ import {
 
 const router = Router()
 
-router.post('/login', async (req, res) => {
+router.post('/login', createRateLimiter(15 * 60 * 1000, 10), async (req, res) => {
   const email = typeof req.body?.email === 'string'
     ? req.body.email.trim().toLowerCase()
     : ''
