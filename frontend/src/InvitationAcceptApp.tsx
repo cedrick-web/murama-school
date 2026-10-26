@@ -41,7 +41,8 @@ export default function InvitationAcceptApp() {
   const [accepted, setAccepted] = useState(false)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const fragment = window.location.hash.replace(/^#/, '')
+    const params = new URLSearchParams(fragment)
     const invitationToken = params.get('token') ?? ''
     // Remove the one-time secret from the address bar and browser history
     // immediately; keep it only in this page's in-memory state.
