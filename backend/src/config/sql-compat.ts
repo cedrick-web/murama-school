@@ -33,6 +33,7 @@ const idReturningTables = new Set([
   'fee_structures',
   'payments',
   'messages',
+  'account_invitations',
 ])
 
 function rewriteDuplicateKeyUpsert(input: string): string {
