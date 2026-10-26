@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 
 import { isDatabaseUnavailable, pool, type PoolConnection } from '../config/database.js'
 import { createRateLimiter } from '../middleware/rate-limit.js'
+import { isInvitationUsable } from '../services/invitation-policy.js'
 
 const router = Router()
 const tokenRateLimit = createRateLimiter(15 * 60 * 1000, 10)
@@ -13,16 +14,6 @@ type Row = Record<string, unknown>
 function tokenDigest(value: unknown): string | null {
   if (typeof value !== 'string' || value.length < 32 || value.length > 200) return null
   return createHash('sha256').update(value).digest('hex')
-}
-
-function invitationIsUsable(invitation: Row): boolean {
-  const expiry = new Date(String(invitation.expiresAt)).getTime()
-  return !invitation.acceptedAt
-    && !invitation.revokedAt
-    && Number.isFinite(expiry)
-    && expiry > Date.now()
-    && !Boolean(invitation.isActive)
-    && ['STUDENT', 'PARENT'].includes(String(invitation.role))
 }
 
 async function loadInvitation(tokenHash: string): Promise<Row | null> {
@@ -70,7 +61,7 @@ router.post('/validate', tokenRateLimit, async (req, res) => {
 
   try {
     const invitation = await loadInvitation(digest)
-    if (!invitation || !invitationIsUsable(invitation)) {
+    if (!invitation || !isInvitationUsable(invitation)) {
       res.status(410).json({ success: false, message: 'This invitation is invalid, expired, revoked, or already used. Contact the school administration for a new link.' })
       return
     }
