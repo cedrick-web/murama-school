@@ -60,6 +60,18 @@ test('adds RETURNING id only for route inserts whose existing response reads ins
   assert.equal(noId.text, 'INSERT INTO message_recipients (message_id, recipient_user_id) VALUES ($1, $2)')
 })
 
+test('returns generated IDs for secure account invitations', () => {
+  const query = translateMysqlQuery(
+    'INSERT INTO account_invitations (user_id, invited_by, token_hash, expires_at) VALUES (?, ?, ?, ?)',
+    [21, 4, 'a'.repeat(64), '2026-10-27T00:00:00.000Z'],
+  )
+  assert.equal(
+    query.text,
+    'INSERT INTO account_invitations (user_id, invited_by, token_hash, expires_at) VALUES ($1, $2, $3, $4) RETURNING id',
+  )
+  assert.equal(query.returnsId, true)
+})
+
 test('quotes camelCase aliases when they are referenced by ORDER BY', () => {
   const query = translateMysqlQuery(
     'SELECT AVG(score) AS averageScore, COUNT(*) AS markedCount FROM assessment_results ORDER BY averageScore DESC NULLS LAST',
