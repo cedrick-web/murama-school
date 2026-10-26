@@ -14,6 +14,7 @@ const validInvitation = {
 test('allows a valid unexpired invitation for an inactive student or parent', () => {
   assert.equal(isInvitationUsable(validInvitation, now), true)
   assert.equal(isInvitationUsable({ ...validInvitation, role: 'PARENT' }, now), true)
+  assert.equal(isInvitationUsable({ ...validInvitation, role: 'TEACHER' }, now), true)
 })
 
 test('rejects accepted, revoked, expired, active, or unsupported-role invitations', () => {

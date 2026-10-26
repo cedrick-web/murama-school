@@ -112,19 +112,19 @@ npm run build
 
 The SQL translation regression tests run without a live database. Build and unit tests do not replace an end-to-end pass against the school's own Supabase project, real imported records, provider configuration and user accounts. No Supabase project credentials are stored in this repository.
 
-## Secure student and parent account invitations
+## Secure student, parent and teacher account invitations
 
-The administrator workspace can create a one-time invitation for an existing **inactive** student or parent account. The school fixes the email and role; the invitee only chooses a password. Parent invitations also require an administrator-verified student relationship. Invitation tokens are stored as SHA-256 hashes, expire within 1–168 hours, can be revoked, and are accepted once.
+The administrator workspace can create a one-time invitation for an existing **inactive** student, parent or teacher account. The school fixes the email and role; the invitee only chooses a password. Parent invitations also require an administrator-verified student relationship. Teacher invitations require an existing teacher profile linked to the account. Invitation tokens are stored as SHA-256 hashes, expire within 1–168 hours, can be revoked, and are accepted once.
 
 Before using this workflow against Supabase:
 
 1. Apply the migration `supabase/migrations/20261026162842_account_invitations.sql` to the target database using the project's reviewed Supabase migration workflow.
 2. Ensure `FRONTEND_URL` is set to the canonical frontend origin (for example, the production Netlify URL). Invitation links use this origin.
-3. In the admin workspace, open **Users**, select an eligible inactive student/parent account, and create the invitation. Parent invitations also require a linked student and relationship.
+3. In the admin workspace, open **Users**, select an eligible inactive student, parent or teacher account, and create the invitation. Parent invitations also require a linked student and relationship.
 4. Copy the returned link and deliver it privately to the intended account holder. The raw token is not stored or shown again; issuing a replacement revokes older pending invitations for that account.
 5. Test token expiry, single-use acceptance, revocation, wrong-role attempts, and parent-child isolation using dedicated test accounts before production rollout.
 
-Email delivery is not configured yet, so administrators must share the generated link manually. The invitation API intentionally does not create school records or assign roles from user input. Create the student/parent record first using the admin workflow, then invite its existing inactive account.
+Email delivery is not configured yet, so administrators must share the generated link manually. The invitation API intentionally does not create school records or assign roles from user input. Create the student, parent or teacher record first using the school data/admin workflow, then invite its existing inactive account.
 
 ## Live data readiness
 
