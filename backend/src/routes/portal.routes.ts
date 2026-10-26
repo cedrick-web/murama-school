@@ -82,7 +82,7 @@ function studentEndpoint(action: string, handler: StudentAction) {
 
     try {
       const studentId = req.user
-        ? await resolveStudentId(req.user, requestedStudentId)
+        ? await resolveStudentId(req.user, requestedStudentId ?? undefined)
         : null
       if (studentId === null) {
         res.status(404).json({
