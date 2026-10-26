@@ -8,6 +8,7 @@ import { checkDatabaseConnection } from './config/database.js'
 import authRoutes from './routes/auth.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import publicRoutes from './routes/public.routes.js'
+import portalRoutes from './routes/portal.routes.js'
 
 dotenv.config()
 
@@ -21,6 +22,7 @@ app.use(morgan('dev'))
 app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/public', publicRoutes)
+app.use('/api/portal', portalRoutes)
 
 app.get('/', (_req, res) => {
   res.json({

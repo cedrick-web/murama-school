@@ -1,6 +1,7 @@
 import { StrictMode, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import AdminApp from './AdminApp'
+import PortalApp from './PortalApp'
 import './tailwind.css'
 import './styles.css'
 
@@ -343,6 +344,7 @@ function App() {
             {school.contactPhone && <a className="public-button outline" href={'tel:' + school.contactPhone}>{t.contactPhone}<ArrowIcon /></a>}
             {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{missingSchoolDetail}</span>}
             <a className="contact-admin-link" href="/admin">{t.openPortal}<ArrowIcon /></a>
+            <a className="contact-admin-link" href="/portal">{language === 'en' ? 'Student & parent portal' : 'Urubuga rw’abanyeshuri n’ababyeyi'}<ArrowIcon /></a>
             <small>{t.portalCaption}</small>
           </div>
         </section>
@@ -358,7 +360,7 @@ function App() {
 }
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : App
+const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
