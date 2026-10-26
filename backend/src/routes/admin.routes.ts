@@ -679,6 +679,71 @@ router.delete('/announcements/:announcementId', async (req: AuthenticatedRequest
   }
 })
 
+
+const visitStatuses = ['NEW', 'CONTACTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+
+router.get('/visits', async (req, res) => {
+  const status = req.query.status === undefined ? null : String(req.query.status).trim().toUpperCase()
+  if (status !== null && !visitStatuses.includes(status as typeof visitStatuses[number])) {
+    res.status(400).json({ success: false, message: 'Invalid visit request status filter' })
+    return
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      'SELECT v.id, v.full_name AS fullName, v.email, v.phone, v.visitor_type AS visitorType, v.preferred_date AS preferredDate, v.preferred_time AS preferredTime, v.purpose, v.status, v.response_note AS responseNote, v.handled_at AS handledAt, v.created_at AS createdAt, v.updated_at AS updatedAt, CONCAT_WS(\' \', handler.first_name, handler.last_name) AS handledBy FROM school_visit_requests v LEFT JOIN users handler ON handler.id = v.handled_by WHERE (? IS NULL OR v.status = ?) ORDER BY CASE v.status WHEN \'NEW\' THEN 0 WHEN \'CONTACTED\' THEN 1 WHEN \'CONFIRMED\' THEN 2 ELSE 3 END, v.preferred_date, v.created_at DESC LIMIT 200',
+      [status, status],
+    )
+    res.json({ success: true, requests: rows })
+  } catch (error) {
+    fail(res, 'load school visit requests', error)
+  }
+})
+
+router.patch('/visits/:requestId', async (req: AuthenticatedRequest, res) => {
+  const requestId = parseUserId(req.params.requestId)
+  const status = typeof req.body?.status === 'string' ? req.body.status.trim().toUpperCase() : ''
+  const responseNote = req.body?.responseNote === undefined || req.body?.responseNote === null
+    ? null
+    : typeof req.body.responseNote === 'string'
+      ? req.body.responseNote.trim()
+      : undefined
+
+  if (!requestId || !visitStatuses.includes(status as typeof visitStatuses[number]) || responseNote === undefined || (responseNote !== null && responseNote.length > 3000)) {
+    res.status(400).json({
+      success: false,
+      message: 'Provide a valid visit request ID, status and response note up to 3000 characters',
+    })
+    return
+  }
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, status FROM school_visit_requests WHERE id = ? FOR UPDATE',
+        [requestId],
+      )
+      const existing = (rows as Record<string, unknown>[])[0]
+      if (!existing) return { statusCode: 404, message: 'Visit request not found' }
+
+      await connection.execute(
+        'UPDATE school_visit_requests SET status = ?, response_note = ?, handled_by = ?, handled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, responseNote, req.user!.id, requestId],
+      )
+      await writeAuditLog(connection, req, 'SCHOOL_VISIT_REQUEST_UPDATED', 'school_visit_request', requestId, {
+        previousStatus: String(existing.status),
+        status,
+        hasResponseNote: Boolean(responseNote),
+      })
+      return { statusCode: 200, message: 'Visit request updated' }
+    })
+
+    res.status(result.statusCode).json({ success: result.statusCode < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'update school visit request', error)
+  }
+})
+
 router.get('/audit-logs', async (req, res) => {
   const requestedLimit = Number(req.query.limit ?? 50)
   const limit = Number.isInteger(requestedLimit)
