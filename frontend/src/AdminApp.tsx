@@ -467,6 +467,76 @@ export default function AdminApp() {
     }
   }
 
+  const invitationCandidates = users.filter((account) => {
+    const active = account.isActive === true || account.isActive === 1
+    return !active && Boolean(account.email) && ['STUDENT', 'PARENT'].includes(account.role)
+  })
+  const selectedInvitationAccount = invitationCandidates.find((account) => account.email === invitationEmail)
+
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedInvitationAccount?.email) {
+      setInvitationError('Choose an eligible inactive student or parent account.')
+      return
+    }
+    if (selectedInvitationAccount.role === 'PARENT' && (!invitationStudentId || invitationRelationship.trim().length < 2)) {
+      setInvitationError('Parent invitations require a linked student and relationship.')
+      return
+    }
+
+    setInvitationBusy(true)
+    setInvitationError('')
+    setInvitationMessage('')
+    setInvitationUrl('')
+    try {
+      const result = await request<{ invitation: CreatedInvitation }>('/api/admin/invitations', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: selectedInvitationAccount.email,
+          ...(selectedInvitationAccount.role === 'PARENT'
+            ? { studentId: Number(invitationStudentId), relationship: invitationRelationship.trim() }
+            : {}),
+          expiresInHours: 48,
+        }),
+      })
+      setInvitationUrl(result.invitation.invitationUrl)
+      setInvitationMessage('Invitation created. Copy the link and share it privately with the intended account holder.')
+      const refreshed = await request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token)
+      setInvitations(refreshed.invitations)
+    } catch (reason) {
+      setInvitationError(reason instanceof Error ? reason.message : 'Unable to create invitation')
+    } finally {
+      setInvitationBusy(false)
+    }
+  }
+
+  async function revokeInvitation(invitationId: number) {
+    if (!token) return
+    setRevokingInvitationId(invitationId)
+    setInvitationError('')
+    setInvitationMessage('')
+    try {
+      await request('/api/admin/invitations/' + invitationId + '/revoke', token, { method: 'PATCH' })
+      const refreshed = await request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token)
+      setInvitations(refreshed.invitations)
+      setInvitationMessage('Invitation revoked. Its link can no longer activate the account.')
+    } catch (reason) {
+      setInvitationError(reason instanceof Error ? reason.message : 'Unable to revoke invitation')
+    } finally {
+      setRevokingInvitationId(null)
+    }
+  }
+
+  async function copyInvitationLink() {
+    if (!invitationUrl) return
+    try {
+      await navigator.clipboard.writeText(invitationUrl)
+      setInvitationMessage('Invitation link copied. Share it only with the intended account holder.')
+    } catch {
+      setInvitationMessage('Copy is unavailable in this browser. Select and copy the invitation link manually.')
+    }
+  }
+
   const visibleUsers = users.filter((account) => {
     const query = userSearch.trim().toLowerCase()
     const searchable = [account.firstName, account.lastName, account.email ?? '', account.phone ?? ''].join(' ').toLowerCase()
