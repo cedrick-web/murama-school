@@ -9,7 +9,7 @@ import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
-import { createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, storedMediaObjectExists, verifyUploadedMedia } from '../services/supabase-storage.service.js'
 import { validateMediaUpload } from '../services/media-upload-policy.js'
 
 const router = Router()
@@ -869,7 +869,7 @@ router.delete('/media/:mediaId', async (req: AuthenticatedRequest, res) => {
       res.status(404).json({ success: false, message: 'Media item not found' })
       return
     }
-    const objectExists = media.status !== 'UPLOADING' || await verifyUploadedMedia(String(media.objectPath), String(media.mimeType), Number(media.sizeBytes))
+    const objectExists = media.status !== 'UPLOADING' || await storedMediaObjectExists(String(media.objectPath))
     if (objectExists) await deleteStoredMedia(String(media.objectPath))
     await withTransaction(async (connection) => {
       await writeAuditLog(connection, req, 'SCHOOL_MEDIA_DELETED', 'school_media_item', mediaId, {
