@@ -6,6 +6,9 @@ const studentPassword = process.env.SMOKE_STUDENT_PASSWORD ?? ''
 const parentEmail = (process.env.SMOKE_PARENT_EMAIL ?? '').trim()
 const parentPassword = process.env.SMOKE_PARENT_PASSWORD ?? ''
 const unlinkedStudentId = (process.env.SMOKE_UNLINKED_STUDENT_ID ?? '').trim()
+const adminEmail = (process.env.SMOKE_ADMIN_EMAIL ?? '').trim()
+const adminPassword = process.env.SMOKE_ADMIN_PASSWORD ?? ''
+const inactiveStudentEmail = (process.env.SMOKE_INACTIVE_STUDENT_EMAIL ?? '').trim()
 
 function requireSetting(name: string, value: string): void {
   if (!value) throw new Error(`Missing required environment variable: ${name}`)
@@ -28,7 +31,7 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
 }
 
-async function login(email: string, password: string, expectedRole: 'STUDENT' | 'PARENT'): Promise<{ token: string; userId: number }> {
+async function login(email: string, password: string, expectedRole: 'STUDENT' | 'PARENT' | 'ADMIN'): Promise<{ token: string; userId: number }> {
   const result = await request('/api/auth/login', undefined, {
     method: 'POST',
     body: JSON.stringify({ email, password }),
@@ -73,6 +76,44 @@ async function main(): Promise<void> {
     console.log('PASS: parent cannot access an unlinked student')
   } else {
     console.log('SKIP: parent-child isolation requires SMOKE_UNLINKED_STUDENT_ID for a known unlinked test student')
+  }
+
+  if (adminEmail || adminPassword || inactiveStudentEmail) {
+    requireSetting('SMOKE_ADMIN_EMAIL', adminEmail)
+    requireSetting('SMOKE_ADMIN_PASSWORD', adminPassword)
+    requireSetting('SMOKE_INACTIVE_STUDENT_EMAIL', inactiveStudentEmail)
+
+    const admin = await login(adminEmail, adminPassword, 'ADMIN')
+    const created = await request('/api/admin/invitations', admin.token, {
+      method: 'POST',
+      body: JSON.stringify({ email: inactiveStudentEmail, expiresInHours: 1 }),
+    })
+    assert(created.status === 201 && created.body.success === true, `Test invitation creation failed (HTTP ${created.status})`)
+    const invitation = created.body.invitation as JsonObject | undefined
+    const invitationId = Number(invitation?.id)
+    const invitationUrl = typeof invitation?.invitationUrl === 'string' ? invitation.invitationUrl : ''
+    assert(Number.isSafeInteger(invitationId) && invitationId > 0 && invitationUrl, 'Invitation response is missing its ID or URL')
+    const tokenFromHash = new URL(invitationUrl).hash.replace(/^#/, '')
+    const token = new URLSearchParams(tokenFromHash).get('token') ?? ''
+    assert(token.length >= 32, 'Invitation URL did not contain a valid one-time token')
+
+    const valid = await request('/api/invitations/validate', undefined, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
+    assert(valid.status === 200 && valid.body.success === true, 'New invitation token did not validate')
+
+    const revoked = await request(`/api/admin/invitations/${invitationId}/revoke`, admin.token, { method: 'PATCH' })
+    assert(revoked.status === 200 && revoked.body.success === true, 'Admin could not revoke the test invitation')
+
+    const invalidated = await request('/api/invitations/validate', undefined, {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    })
+    assert(invalidated.status === 410, `Revoked invitation token remained usable (HTTP ${invalidated.status})`)
+    console.log('PASS: invitation creation, validation and revocation')
+  } else {
+    console.log('SKIP: invitation lifecycle requires SMOKE_ADMIN_EMAIL, SMOKE_ADMIN_PASSWORD and SMOKE_INACTIVE_STUDENT_EMAIL for a dedicated inactive student account')
   }
 
   console.log('PASS: authorized end-to-end smoke checks completed')
