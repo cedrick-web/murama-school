@@ -22,7 +22,7 @@ function dateInRwanda(now: Date): string {
 }
 
 function isCalendarDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const date = new Date(value + 'T00:00:00.000Z')
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
@@ -41,12 +41,12 @@ export function validateVisitRequest(input: Record<string, unknown>, now = new D
   if (
     fullName.length < 2 || fullName.length > 120
     || (!emailInput && !phoneInput)
-    || (emailInput && (emailInput.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(emailInput)))
-    || (phoneInput && (phoneInput.length > 40 || phoneInput.replace(/\\D/g, '').length < 7))
+    || (emailInput && (emailInput.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)))
+    || (phoneInput && (phoneInput.length > 40 || phoneInput.replace(/\D/g, '').length < 7))
     || !['PARENT', 'STUDENT', 'PROSPECTIVE_PARENT', 'OTHER'].includes(visitorType)
     || !isCalendarDate(preferredDate)
     || preferredDate < dateInRwanda(now)
-    || (preferredTime !== null && (typeof preferredTime !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(preferredTime)))
+    || (preferredTime !== null && (typeof preferredTime !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(preferredTime)))
     || purpose.length < 10 || purpose.length > 3000
   ) return null
 
