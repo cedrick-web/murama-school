@@ -1,0 +1,37 @@
+name: Refresh dependency lockfiles
+
+on:
+  push:
+    branches: [deps/pin-exact-versions]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: deps/pin-exact-versions
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Refresh frontend lockfile without running package scripts
+        working-directory: frontend
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Refresh backend lockfile without running package scripts
+        working-directory: backend
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit refreshed lockfiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/package-lock.json backend/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lockfiles already match the pinned manifests."
+          else
+            git commit -m "build: refresh pinned dependency lockfiles"
+            git push origin HEAD:refs/heads/deps/pin-exact-versions
+          fi
