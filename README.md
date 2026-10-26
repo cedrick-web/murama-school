@@ -160,6 +160,13 @@ The migrations `supabase/migrations/20261026170532_profiles_policy_and_invitatio
 The migration `supabase/migrations/20261026170628_media_visit_foreign_key_indexes.sql` adds indexes for the media uploader and visit-request handler foreign keys identified by the live Supabase performance advisor.
 
 
+
+## Authorized end-to-end smoke tests
+
+The backend includes an opt-in smoke test for a deployed API. It checks readiness, student sign-in and own-record access, parent sign-in and linked-child access, and (when configured) parent-child isolation. Run it only against staging or an explicitly approved production test window using dedicated test accounts, never ordinary student/parent credentials.
+
+From the `backend` directory, set `SMOKE_BASE_URL`, `SMOKE_STUDENT_EMAIL`, `SMOKE_STUDENT_PASSWORD`, `SMOKE_PARENT_EMAIL`, and `SMOKE_PARENT_PASSWORD` in your local shell or CI secret store. To test denial for an unrelated student, also set `SMOKE_UNLINKED_STUDENT_ID` to a valid student ID not linked to the test parent. Then run `npm run smoke:e2e`. The script never prints passwords or access tokens and is not part of default CI because it requires authorized accounts and a deployed target.
+
 ## Production readiness probe
 
 Use `GET /api/health/ready` as the deployment readiness check. It returns HTTP 200 only when the database is reachable, `JWT_SECRET` meets the minimum length, and server-side Supabase media storage is configured. A degraded response identifies component names only and never returns secret values. Keep the existing `/api/health` and `/api/health/database` endpoints for existing diagnostics. Before production rollout, run this probe against the actual Netlify runtime and verify image/video upload, publish, read and delete with a dedicated test account.
