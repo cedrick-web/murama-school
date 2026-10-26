@@ -3,11 +3,12 @@ import { Router, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 
 import { isDatabaseUnavailable, pool, type PoolConnection } from '../config/database.js'
-import { createRateLimiter } from '../middleware/rate-limit.js'
+import { createDatabaseRateLimiter } from '../middleware/rate-limit.js'
 import { isInvitationUsable } from '../services/invitation-policy.js'
 
 const router = Router()
-const tokenRateLimit = createRateLimiter(15 * 60 * 1000, 10)
+const validateRateLimit = createDatabaseRateLimiter(15 * 60 * 1000, 10, 'invitation-validate')
+const acceptRateLimit = createDatabaseRateLimiter(15 * 60 * 1000, 10, 'invitation-accept')
 
 type Row = Record<string, unknown>
 
@@ -52,7 +53,7 @@ async function withTransaction<T>(action: (connection: PoolConnection) => Promis
   }
 }
 
-router.post('/validate', tokenRateLimit, async (req, res) => {
+router.post('/validate', validateRateLimit, async (req, res) => {
   const digest = tokenDigest(req.body?.token)
   if (!digest) {
     res.status(400).json({ success: false, message: 'A valid invitation token is required' })
@@ -80,7 +81,7 @@ router.post('/validate', tokenRateLimit, async (req, res) => {
   }
 })
 
-router.post('/accept', tokenRateLimit, async (req, res) => {
+router.post('/accept', acceptRateLimit, async (req, res) => {
   const digest = tokenDigest(req.body?.token)
   const password = typeof req.body?.password === 'string' ? req.body.password : ''
   if (!digest) {
