@@ -160,8 +160,8 @@ const fees: StudentAction = async (req, res, studentId) => {
     [studentId, limit],
   )
   const [summaryRows] = await pool.execute(
-    'SELECT COALESCE(SUM(amount_due), 0) AS totalDue, COALESCE(SUM(amount_paid), 0) AS totalPaid, COALESCE(SUM(amount_due - amount_paid), 0) AS outstanding FROM fee_items WHERE student_id = ?',
-    [studentId],
+    'SELECT COALESCE(SUM(CASE WHEN status <> ? THEN amount_due ELSE 0 END), 0) AS totalDue, COALESCE(SUM(amount_paid), 0) AS totalPaid, COALESCE(SUM(CASE WHEN status <> ? THEN GREATEST(amount_due - amount_paid, 0) ELSE 0 END), 0) AS outstanding FROM fee_items WHERE student_id = ?',
+    ['WAIVED', 'WAIVED', studentId],
   )
   res.json({
     success: true,
@@ -226,7 +226,7 @@ router.get('/student/messages', requireRole('STUDENT'), studentEndpoint('student
 router.get('/parent/children', requireRole('PARENT'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT s.id AS studentId, s.admission_number AS admissionNumber, s.status, sp.relationship, sp.is_primary AS isPrimary, u.first_name AS firstName, u.last_name AS lastName, c.name AS className, st.name AS streamName, ay.name AS academicYear FROM parents p INNER JOIN student_parents sp ON sp.parent_id = p.id INNER JOIN students s ON s.id = sp.student_id INNER JOIN users u ON u.id = s.user_id LEFT JOIN student_enrollments e ON e.student_id = s.id AND e.enrollment_status = ? LEFT JOIN academic_years ay ON ay.id = e.academic_year_id LEFT JOIN classes c ON c.id = e.class_id LEFT JOIN streams st ON st.id = e.stream_id WHERE p.user_id = ? ORDER BY sp.is_primary DESC, u.last_name, u.first_name',
+      'SELECT s.id AS studentId, s.admission_number AS admissionNumber, s.status, sp.relationship, sp.is_primary AS isPrimary, u.first_name AS firstName, u.last_name AS lastName, c.name AS className, st.name AS streamName, ay.name AS academicYear FROM parents p INNER JOIN student_parents sp ON sp.parent_id = p.id INNER JOIN students s ON s.id = sp.student_id INNER JOIN users u ON u.id = s.user_id LEFT JOIN student_enrollments e ON e.id = (SELECT e2.id FROM student_enrollments e2 WHERE e2.student_id = s.id AND e2.enrollment_status = ? ORDER BY e2.academic_year_id DESC, e2.term_id DESC NULLS LAST, e2.id DESC LIMIT 1) LEFT JOIN academic_years ay ON ay.id = e.academic_year_id LEFT JOIN classes c ON c.id = e.class_id LEFT JOIN streams st ON st.id = e.stream_id WHERE p.user_id = ? ORDER BY sp.is_primary DESC, u.last_name, u.first_name',
       ['ACTIVE', req.user!.id],
     )
     res.json({ success: true, children: rows })
