@@ -156,6 +156,18 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
     return
   }
 
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(process.env.FRONTEND_URL?.trim() || 'http://localhost:5173')
+  } catch {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must be a valid absolute URL' })
+    return
+  }
+  if (!['http:', 'https:'].includes(baseUrl.protocol)) {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must use HTTP or HTTPS' })
+    return
+  }
+
   const token = randomBytes(32).toString('base64url')
   const tokenHash = createHash('sha256').update(token).digest('hex')
   const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
@@ -238,12 +250,6 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
       return
     }
 
-    const configuredBase = process.env.FRONTEND_URL?.trim() || 'http://localhost:5173'
-    const baseUrl = new URL(configuredBase)
-    if (!['http:', 'https:'].includes(baseUrl.protocol)) {
-      res.status(500).json({ success: false, message: 'FRONTEND_URL must use HTTP or HTTPS' })
-      return
-    }
     const invitationUrl = new URL('/invite', baseUrl.origin)
     invitationUrl.searchParams.set('token', token)
     res.status(201).json({
