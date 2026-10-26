@@ -83,8 +83,8 @@ export async function verifyUploadedMedia(path: string, expectedMimeType: string
   }
   const body = await response.json().catch(() => null) as Record<string, unknown> | null
   if (!body) return false
-  const actualSize = Number(body.size ?? body.metadata && (body.metadata as Record<string, unknown>).size)
-  const actualMime = String(body.mimetype ?? body.contentType ?? body.metadata && (body.metadata as Record<string, unknown>).mimetype ?? '').toLowerCase()
+  const actualSize = Number(body.size ?? (body.metadata && (body.metadata as Record<string, unknown>).size))
+  const actualMime = String(body.mimetype ?? body.contentType ?? (body.metadata && (body.metadata as Record<string, unknown>).mimetype) ?? '').toLowerCase()
   return Number.isFinite(actualSize)
     && actualSize === expectedSize
     && actualMime === expectedMimeType.toLowerCase()
