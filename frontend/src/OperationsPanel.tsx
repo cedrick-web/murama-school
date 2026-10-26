@@ -1,9 +1,9 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react'
 import './operations.css'
 
-type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages'
+type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages' | 'visits'
 
-const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages']
+const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages', 'visits']
 
 function operationsTabFromPath(pathname: string): Tab {
   const segment = pathname.replace(/\/+$/, '').split('/')[3]
@@ -33,6 +33,7 @@ interface FeeItem { id: number; studentId: number; admissionNumber: string; firs
 interface Payment { id: number; receiptNumber: string; admissionNumber: string; firstName: string; lastName: string; amount: number | string; paymentMethod: PaymentMethod; reference: string | null; paidAt: string }
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
 interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
+interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -111,6 +112,7 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'timetable', title: 'Timetable', sub: 'Periods & teacher slots', number: '03' },
     { id: 'finance', title: 'Fees & payments', sub: 'Balances & receipts', number: '04' },
     { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
+    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },
   ]
   return <div className="operations-workspace">
     <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
@@ -125,10 +127,84 @@ export default function OperationsPanel({ token }: { token: string }) {
         {tab === 'gradebook' && <GradebookModule token={token} />}
         {tab === 'timetable' && <TimetableModule token={token} />}
         {tab === 'finance' && <FinanceModule token={token} />}
-        {tab === 'messages' && <MessagesModule token={token} />}
+        {tab === 'messages' && <MessagesModule token={token} />}\n        {tab === 'visits' && <VisitsModule token={token} />}
       </section>
     </div>
   </div>
+}
+
+
+function VisitsModule({ token }: { token: string }) {
+  const [status, setStatus] = useState('NEW')
+  const [requests, setRequests] = useState<VisitRequest[]>([])
+  const [edits, setEdits] = useState<Record<number, { status: VisitRequest['status']; responseNote: string }>>({})
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = status === 'ALL' ? '' : '?status=' + encodeURIComponent(status)
+      const result = await api<{ requests: VisitRequest[] }>('/api/admin/visits' + query, token)
+      setRequests(result.requests)
+      setEdits((current) => {
+        const next = { ...current }
+        for (const item of result.requests) {
+          if (!next[item.id]) next[item.id] = { status: item.status, responseNote: item.responseNote ?? '' }
+        }
+        return next
+      })
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setLoading(false)
+    }
+  }, [status, token])
+
+  useEffect(() => { void load() }, [load])
+
+  async function save(item: VisitRequest) {
+    const edit = edits[item.id]
+    if (!edit) return
+    setSavingId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/visits/' + item.id, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: edit.status, responseNote: edit.responseNote }),
+      })
+      setNotice('Visit request #' + item.id + ' updated.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const countNew = requests.filter((item) => item.status === 'NEW').length
+  return <section className="operations-section">
+    <div className="operations-section-heading"><div><h4>School visit requests</h4><p>Review visit enquiries, record follow-up, and confirm or close appointments. A submitted request is not automatically a confirmed visit.</p></div><button type="button" className="operations-button secondary" disabled={loading} onClick={() => void load()}>Refresh</button></div>
+    <div className="operations-form-grid">
+      <Field label="Filter by status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="NEW">New requests</option><option value="CONTACTED">Contacted</option><option value="CONFIRMED">Confirmed</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option><option value="ALL">All requests</option></select></Field>
+      <div className="operations-inline-note"><strong>{countNew}</strong><span>new request(s) in this view</span></div>
+    </div>
+    {notice && <div className="operations-notice" role="status">{notice}</div>}
+    <State loading={loading} error={error} empty={!loading && !requests.length ? 'No visit requests match this filter.' : undefined} retry={() => void load()} />
+    {!loading && requests.map((item) => {
+      const edit = edits[item.id] ?? { status: item.status, responseNote: item.responseNote ?? '' }
+      return <article className="operations-section visit-admin-card" key={item.id}>
+        <div className="operations-section-heading"><div><h4>{item.fullName}</h4><p>Request #{item.id} · {item.visitorType.replace(/_/g, ' ')} · Received {shortDate(item.createdAt)}</p></div><span className={'visit-admin-status status-' + item.status.toLowerCase()}>{item.status}</span></div>
+        <div className="visit-admin-details"><div><small>Preferred date</small><strong>{shortDate(item.preferredDate)}{item.preferredTime ? ' · ' + item.preferredTime : ''}</strong></div><div><small>Contact</small><strong>{item.email || 'No email'}{item.phone ? ' · ' + item.phone : ''}</strong></div><div className="visit-admin-purpose"><small>Purpose</small><p>{item.purpose}</p></div></div>
+        <div className="operations-form-grid visit-admin-controls"><Field label="Request status"><select value={edit.status} onChange={(event) => setEdits((current) => ({ ...current, [item.id]: { ...edit, status: event.target.value as VisitRequest['status'] } }))}><option value="NEW">New</option><option value="CONTACTED">Contacted</option><option value="CONFIRMED">Confirmed</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select></Field><Field label="Response / internal follow-up note"><textarea rows={2} maxLength={3000} value={edit.responseNote} onChange={(event) => setEdits((current) => ({ ...current, [item.id]: { ...edit, responseNote: event.target.value } }))} placeholder="Record the contact outcome or appointment details" /></Field><button className="operations-button primary" type="button" disabled={savingId === item.id} onClick={() => void save(item)}>{savingId === item.id ? 'Saving…' : 'Save update'}</button></div>
+        {item.handledBy && <p className="visit-admin-meta">Last updated by {item.handledBy}{item.handledAt ? ' · ' + shortDate(item.handledAt) : ''}</p>}
+      </article>
+    })}
+  </section>
 }
 
 function AttendanceModule({ token }: { token: string }) {

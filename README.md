@@ -134,6 +134,15 @@ Before using this workflow against Supabase:
 
 Email delivery is not configured yet, so administrators must share the generated link manually. The invitation API intentionally does not create school records or assign roles from user input. Create the student, parent or teacher record first using the school data/admin workflow, then invite its existing inactive account.
 
+
+## School visit request workflow
+
+The public school site includes an English/Kinyarwanda visit-request form. Visitors provide their name, at least one contact method, visitor type, a preferred date, an optional time, and the purpose of the visit. Public submissions are validated server-side and rate-limited; a requested date is not treated as a confirmed appointment.
+
+The administrator workspace exposes the queue at **Administration → School operations → Visit requests**. Administrators can filter by status, record follow-up notes, and move requests through **NEW**, **CONTACTED**, **CONFIRMED**, **COMPLETED**, or **CANCELLED**. Every status change is recorded in the audit log.
+
+Before enabling this workflow on a database, apply `supabase/migrations/20261026180000_school_visit_requests.sql` through the reviewed Supabase migration workflow. The table has RLS enabled and direct browser-role access revoked; application access is through the server-side API. Automated email or SMS delivery is not yet configured, so administrators must contact visitors using the details they submitted.
+
 ## Live data readiness
 
 The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.
