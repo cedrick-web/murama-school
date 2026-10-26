@@ -99,7 +99,7 @@ router.post('/accept', tokenRateLimit, async (req, res) => {
         [digest],
       )
       const invitation = (rows as Row[])[0]
-      if (!invitation || !invitationIsUsable(invitation)) {
+      if (!invitation || !isInvitationUsable(invitation)) {
         return { ok: false as const, status: 410, message: 'This invitation is invalid, expired, revoked, or already used. Contact the school administration for a new link.' }
       }
 
