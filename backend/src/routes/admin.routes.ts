@@ -861,7 +861,7 @@ router.delete('/media/:mediaId', async (req: AuthenticatedRequest, res) => {
   }
   try {
     const [rows] = await pool.execute(
-      'SELECT id, title, object_path AS objectPath, status FROM school_media_items WHERE id = ? LIMIT 1',
+      'SELECT id, title, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status FROM school_media_items WHERE id = ? LIMIT 1',
       [mediaId],
     )
     const media = (rows as Record<string, unknown>[])[0]
@@ -869,7 +869,8 @@ router.delete('/media/:mediaId', async (req: AuthenticatedRequest, res) => {
       res.status(404).json({ success: false, message: 'Media item not found' })
       return
     }
-    await deleteStoredMedia(String(media.objectPath))
+    const objectExists = media.status !== 'UPLOADING' || await verifyUploadedMedia(String(media.objectPath), String(media.mimeType), Number(media.sizeBytes))
+    if (objectExists) await deleteStoredMedia(String(media.objectPath))
     await withTransaction(async (connection) => {
       await writeAuditLog(connection, req, 'SCHOOL_MEDIA_DELETED', 'school_media_item', mediaId, {
         title: String(media.title),
