@@ -70,7 +70,7 @@ router.get('/media', async (_req, res) => {
       mimeType: item.mimeType,
       sizeBytes: item.sizeBytes,
       publishedAt: item.publishedAt,
-      publicUrl: await createSignedMediaReadUrl(String(item.objectPath)),
+      publicUrl: await createSignedMediaReadUrl(String(item.objectPath), 86400),
     })))
     res.json({ success: true, media })
   } catch (error) {
