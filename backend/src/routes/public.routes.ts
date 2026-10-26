@@ -2,6 +2,7 @@ import { Router } from 'express'
 
 import { isDatabaseUnavailable, pool } from '../config/database.js'
 import { createRateLimiter } from '../middleware/rate-limit.js'
+import { validateVisitRequest } from '../services/visit-request-policy.js'
 
 const router = Router()
 
@@ -53,35 +54,9 @@ router.get('/announcements', async (_req, res) => {
 
 const visitRequestRateLimit = createRateLimiter(15 * 60 * 1000, 5)
 
-function validVisitDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return false
-  const parsed = new Date(value + 'T00:00:00.000Z')
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return false
-  const todayInRwanda = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Kigali' }).format(new Date())
-  return value >= todayInRwanda
-}
-
 router.post('/visits', visitRequestRateLimit, async (req, res) => {
-  const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : ''
-  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
-  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : ''
-  const visitorType = typeof req.body?.visitorType === 'string' ? req.body.visitorType.trim().toUpperCase() : 'OTHER'
-  const preferredDate = req.body?.preferredDate
-  const preferredTime = req.body?.preferredTime === '' || req.body?.preferredTime === null || req.body?.preferredTime === undefined
-    ? null
-    : req.body.preferredTime
-  const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose.trim() : ''
-
-  if (
-    fullName.length < 2 || fullName.length > 120
-    || (!email && !phone)
-    || (email && (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)))
-    || (phone && (phone.length > 40 || phone.replace(/\\D/g, '').length < 7))
-    || !['PARENT', 'STUDENT', 'PROSPECTIVE_PARENT', 'OTHER'].includes(visitorType)
-    || !validVisitDate(preferredDate)
-    || (preferredTime !== null && (typeof preferredTime !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(preferredTime)))
-    || purpose.length < 10 || purpose.length > 3000
-  ) {
+  const visit = validateVisitRequest(req.body ?? {})
+  if (!visit) {
     res.status(400).json({
       success: false,
       message: 'Provide a name, valid email or phone, visitor type, today-or-future visit date, optional valid time, and a purpose between 10 and 3000 characters.',
@@ -92,7 +67,7 @@ router.post('/visits', visitRequestRateLimit, async (req, res) => {
   try {
     const [result] = await pool.execute(
       'INSERT INTO school_visit_requests (full_name, email, phone, visitor_type, preferred_date, preferred_time, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [fullName, email || null, phone || null, visitorType, preferredDate, preferredTime, purpose],
+      [visit.fullName, visit.email, visit.phone, visit.visitorType, visit.preferredDate, visit.preferredTime, visit.purpose],
     )
     const requestId = Number((result as { insertId: number }).insertId)
     res.status(201).json({
