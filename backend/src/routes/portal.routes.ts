@@ -3,7 +3,7 @@ import { Router, type Response } from 'express'
 import { isDatabaseUnavailable, pool } from '../config/database.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { AuthUser } from '../types/auth.js'
-import { authorizeStudentScope } from '../services/portal-access.js'
+import { listParentChildren, resolvePortalStudentId } from '../services/student-parent-portal.service.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -36,32 +36,6 @@ function respondWithError(res: Response, error: unknown, action: string): void {
   res.status(500).json({ success: false, message: 'Unable to load school portal information' })
 }
 
-/**
- * Resolve a student exclusively through the authenticated identity or the
- * parent's verified student_parents relationship. Never trust a URL ID alone.
- */
-async function resolveStudentId(user: AuthUser, requestedStudentId?: number): Promise<number | null> {
-  if (user.role === 'STUDENT') {
-    const [rows] = await pool.execute(
-      'SELECT id FROM students WHERE user_id = ? LIMIT 1',
-      [user.id],
-    )
-    const student = (rows as Row[])[0]
-    if (!student) return null
-    return authorizeStudentScope(user.role, Number(student.id), [], requestedStudentId)
-  }
-
-  if (user.role === 'PARENT' && requestedStudentId !== undefined) {
-    const [rows] = await pool.execute(
-      'SELECT s.id FROM parents p INNER JOIN student_parents sp ON sp.parent_id = p.id INNER JOIN students s ON s.id = sp.student_id WHERE p.user_id = ? AND s.id = ? LIMIT 1',
-      [user.id, requestedStudentId],
-    )
-    const student = (rows as Row[])[0]
-    return authorizeStudentScope(user.role, null, student ? [Number(student.id)] : [], requestedStudentId)
-  }
-
-  return null
-}
 
 type StudentAction = (
   req: AuthenticatedRequest,
@@ -82,7 +56,7 @@ function studentEndpoint(action: string, handler: StudentAction) {
 
     try {
       const studentId = req.user
-        ? await resolveStudentId(req.user, requestedStudentId ?? undefined)
+        ? await resolvePortalStudentId(async (sql, values) => pool.execute(sql, values), req.user, requestedStudentId ?? undefined)
         : null
       if (studentId === null) {
         res.status(404).json({
@@ -225,11 +199,11 @@ router.get('/student/messages', requireRole('STUDENT'), studentEndpoint('student
 
 router.get('/parent/children', requireRole('PARENT'), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const [rows] = await pool.execute(
-      'SELECT s.id AS studentId, s.admission_number AS admissionNumber, s.status, sp.relationship, sp.is_primary AS isPrimary, u.first_name AS firstName, u.last_name AS lastName, c.name AS className, st.name AS streamName, ay.name AS academicYear FROM parents p INNER JOIN student_parents sp ON sp.parent_id = p.id INNER JOIN students s ON s.id = sp.student_id INNER JOIN users u ON u.id = s.user_id LEFT JOIN student_enrollments e ON e.id = (SELECT e2.id FROM student_enrollments e2 WHERE e2.student_id = s.id AND e2.enrollment_status = ? ORDER BY e2.academic_year_id DESC, e2.term_id DESC NULLS LAST, e2.id DESC LIMIT 1) LEFT JOIN academic_years ay ON ay.id = e.academic_year_id LEFT JOIN classes c ON c.id = e.class_id LEFT JOIN streams st ON st.id = e.stream_id WHERE p.user_id = ? ORDER BY sp.is_primary DESC, u.last_name, u.first_name',
-      ['ACTIVE', req.user!.id],
+    const children = await listParentChildren(
+      async (sql, values) => pool.execute(sql, values),
+      req.user!.id,
     )
-    res.json({ success: true, children: rows })
+    res.json({ success: true, children })
   } catch (error) {
     respondWithError(res, error, 'parent children')
   }
