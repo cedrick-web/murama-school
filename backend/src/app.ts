@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import publicRoutes from './routes/public.routes.js'
 import portalRoutes from './routes/portal.routes.js'
+import staffRoutes from './routes/staff.routes.js'
 import invitationRoutes from './routes/invitation.routes.js'
 import teacherRoutes from './routes/teacher.routes.js'
 
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/portal', portalRoutes)
+app.use('/api/staff', staffRoutes)
 app.use('/api/invitations', invitationRoutes)
 app.use('/api/teacher', teacherRoutes)
 
