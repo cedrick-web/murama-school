@@ -141,3 +141,26 @@
 
 .operations-row-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
 .operations-row-actions .operations-button { min-height:29px; padding-inline:8px; }
+
+/* School visit request workflow */
+.visit-admin-card{margin-top:16px;border:1px solid #e0e7ea;border-radius:13px;overflow:hidden;background:#fff}
+.visit-admin-card>.operations-section-heading{padding:18px 20px;border-bottom:1px solid #edf1f3}
+.visit-admin-card>.operations-section-heading h4{margin:0;font-size:14px}
+.visit-admin-card>.operations-section-heading p{margin:6px 0 0}
+.visit-admin-status{display:inline-flex;align-items:center;border-radius:30px;padding:6px 9px;font-size:9px;font-weight:800;letter-spacing:.06em;white-space:nowrap;background:#edf1f3;color:#52636f}
+.visit-admin-status.status-new{background:#fff0d8;color:#875b13}
+.visit-admin-status.status-confirmed{background:#e4f4e9;color:#24663c}
+.visit-admin-status.status-cancelled{background:#fbe9e7;color:#963a30}
+.visit-admin-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;padding:18px 20px}
+.visit-admin-details small{display:block;color:#7a8992;font-size:10px;margin-bottom:6px}
+.visit-admin-details strong{display:block;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.visit-admin-purpose{grid-column:1/-1}
+.visit-admin-purpose p{font-size:12px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:#425560}
+.visit-admin-controls{padding:0 20px 18px;align-items:end}
+.visit-admin-controls .operations-field textarea{width:100%;box-sizing:border-box;resize:vertical;border:1px solid #d7e1e4;border-radius:8px;padding:10px;font:inherit;font-size:12px}
+.visit-admin-controls .operations-button{align-self:end}
+.visit-admin-meta{border-top:1px solid #edf1f3;margin:0;padding:12px 20px;color:#7b8a93;font-size:10px}
+.operations-inline-note{display:flex;align-items:center;gap:10px;color:#637681;font-size:11px;padding:8px 0}
+.operations-inline-note strong{font-size:22px;color:#173d4d}
+.operations-notice{padding:11px 13px;border-radius:9px;background:#edf7f0;border:1px solid #cde5d4;color:#245b38;font-size:12px;margin:12px 0}
+@media(max-width:680px){.visit-admin-details{grid-template-columns:1fr}.visit-admin-purpose{grid-column:auto}.visit-admin-controls{grid-template-columns:1fr}.visit-admin-card>.operations-section-heading{align-items:flex-start}}
