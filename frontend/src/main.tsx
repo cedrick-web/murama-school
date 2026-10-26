@@ -359,7 +359,7 @@ function App() {
 }
 
 const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\\/admin(?:\\/|$)/.test(normalizedPath) ? AdminApp : /^\\/portal(?:\\/|$)/.test(normalizedPath) ? PortalApp : App
+const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : /^\/portal(?:\/|$)/.test(normalizedPath) ? PortalApp : App
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
