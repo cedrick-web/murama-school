@@ -47,7 +47,7 @@ interface ApiResponse {
 interface CreatedInvitation {
   id: number
   email: string
-  role: 'STUDENT' | 'PARENT'
+  role: 'STUDENT' | 'PARENT' | 'TEACHER'
   expiresAt: string
   invitationUrl: string
 }
@@ -56,7 +56,7 @@ interface AccountInvitation {
   email: string
   firstName: string
   lastName: string
-  role: 'STUDENT' | 'PARENT'
+  role: 'STUDENT' | 'PARENT' | 'TEACHER'
   expiresAt: string
   acceptedAt: string | null
   revokedAt: string | null
@@ -470,7 +470,7 @@ export default function AdminApp() {
 
   const invitationCandidates = users.filter((account) => {
     const active = account.isActive === true || account.isActive === 1
-    return !active && Boolean(account.email) && ['STUDENT', 'PARENT'].includes(account.role)
+    return !active && Boolean(account.email) && ['STUDENT', 'PARENT', 'TEACHER'].includes(account.role)
   })
   const selectedInvitationAccount = invitationCandidates.find((account) => account.email === invitationEmail)
 
