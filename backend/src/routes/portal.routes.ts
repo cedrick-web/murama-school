@@ -9,8 +9,8 @@ router.use(requireAuth)
 
 type Row = Record<string, unknown>
 
-function parsePositiveId(value: string | undefined): number | null {
-  if (!value || !/^\d+$/.test(value)) return null
+function parsePositiveId(value: string | string[] | undefined): number | null {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null
   const id = Number(value)
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
