@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from 'express'
 import jwt from 'jsonwebtoken'
 
+import { isDatabaseUnavailable } from '../config/database.js'
+import { getUserById } from '../services/auth.service.js'
 import type { AuthUser, JwtPayload, UserRole } from '../types/auth.js'
 
 export interface AuthenticatedRequest extends Request {
@@ -11,7 +13,10 @@ function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET
 
   if (!secret || secret.length < 32) {
-    throw new Error('JWT_SECRET must be configured with at least 32 characters')
+    throw Object.assign(
+      new Error('JWT_SECRET must be configured with at least 32 characters'),
+      { code: 'JWT_NOT_CONFIGURED' },
+    )
   }
 
   return secret
@@ -26,11 +31,11 @@ export function signAccessToken(user: AuthUser): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: '8h' })
 }
 
-export function requireAuth(
+export async function requireAuth(
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
-): void {
+): Promise<void> {
   const authorization = req.headers.authorization
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice(7)
@@ -41,23 +46,65 @@ export function requireAuth(
     return
   }
 
+  let secret: string
   try {
-    const payload = jwt.verify(token, getJwtSecret()) as JwtPayload
-    req.user = {
-      id: payload.userId,
-      firstName: '',
-      lastName: '',
-      email: null,
-      phone: null,
-      role: payload.role,
+    secret = getJwtSecret()
+  } catch {
+    console.error('JWT authentication is unavailable because JWT_SECRET is not configured')
+    res.status(503).json({ success: false, message: 'Authentication is temporarily unavailable.' })
+    return
+  }
+
+  let payload: JwtPayload
+  try {
+    const verified = jwt.verify(token, secret)
+    if (
+      typeof verified !== 'object'
+      || !Number.isSafeInteger(verified.userId)
+      || verified.userId <= 0
+      || !isUserRole(verified.role)
+    ) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid or expired authentication token',
+      })
+      return
     }
-    next()
+    payload = { userId: verified.userId, role: verified.role }
   } catch {
     res.status(401).json({
       success: false,
       message: 'Invalid or expired authentication token',
     })
+    return
   }
+
+  try {
+    const user = await getUserById(payload.userId)
+    if (!user) {
+      res.status(401).json({ success: false, message: 'User account is no longer active' })
+      return
+    }
+    req.user = user
+    next()
+  } catch (error) {
+    console.error('Unable to verify the current school account', error)
+    res.status(isDatabaseUnavailable(error) ? 503 : 500).json({
+      success: false,
+      message: isDatabaseUnavailable(error)
+        ? 'The school database is not configured or is temporarily unavailable.'
+        : 'Unable to verify the current school account',
+    })
+  }
+}
+
+function isUserRole(value: unknown): value is UserRole {
+  return value === 'ADMIN'
+    || value === 'HEADTEACHER'
+    || value === 'TEACHER'
+    || value === 'STUDENT'
+    || value === 'PARENT'
+    || value === 'STAFF'
 }
 
 export function requireRole(...allowedRoles: UserRole[]) {

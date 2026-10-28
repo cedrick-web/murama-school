@@ -66,7 +66,7 @@ function profileFor(user: {
 
 export async function startGoogleSignIn(): Promise<void> {
   const supabase = getSupabaseClient()
-  const redirectTo = new URL('/admin', window.location.origin).toString()
+  const redirectTo = new URL('/signin', window.location.origin).toString()
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -116,10 +116,15 @@ export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLo
 }
 
 export function cleanGoogleCallbackUrl(): void {
-  window.history.replaceState({}, document.title, '/admin')
+  window.history.replaceState({}, document.title, '/signin')
 }
 
 export function getGoogleCallbackError(): string | null {
   const params = new URLSearchParams(window.location.search)
-  return params.get('error_description') ?? params.get('error')
+  const error = params.get('error_description') ?? params.get('error')
+  if (!error) return null
+  if (/unsupported provider|provider is not enabled/i.test(error)) {
+    return 'Google sign-in is not enabled for this Supabase project yet. In Supabase, open Authentication → Providers → Google, enable Google, and save the OAuth client ID and secret there.'
+  }
+  return error
 }

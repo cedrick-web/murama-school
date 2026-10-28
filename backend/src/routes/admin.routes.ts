@@ -6,6 +6,9 @@ import { isDatabaseUnavailable, pool } from '../config/database.js'
 import academicRoutes from './academic.routes.js'
 import peopleRoutes from './people.routes.js'
 import operationsRoutes from './operations.routes.js'
+import contentRoutes from './content.routes.js'
+import directoryRoutes from './directory.routes.js'
+import { createSchoolUser, hashPassword, parsePassword, provisionableRoles } from '../services/school-users.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
 
@@ -30,10 +33,12 @@ const settingDefaults = {
 } as const
 type SettingKey = keyof typeof settingDefaults
 
-router.use(requireAuth, requireRole('ADMIN'))
+router.use(requireAuth, requireRole('ADMIN', 'HEADTEACHER'))
 router.use('/academics', academicRoutes)
 router.use('/people', peopleRoutes)
+router.use('/people', directoryRoutes)
 router.use('/operations', operationsRoutes)
+router.use('/content', contentRoutes)
 
 async function withTransaction<T>(
   action: (connection: PoolConnection) => Promise<T>,
@@ -109,6 +114,70 @@ function parseUserId(value: string | string[]): number | null {
   const id = Number(value)
   return Number.isSafeInteger(id) && id > 0 ? id : null
 }
+
+router.post('/users', async (req: AuthenticatedRequest, res) => {
+  const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : ''
+  const lastName = typeof req.body?.lastName === 'string' ? req.body.lastName.trim() : ''
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+  const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : ''
+  const roleName = typeof req.body?.role === 'string' ? req.body.role.trim().toUpperCase() : ''
+  const password = parsePassword(req.body?.password)
+  const isActive = req.body?.isActive !== false
+
+  if (!firstName || firstName.length > 100 || !lastName || lastName.length > 100 || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password || !validRoles.includes(roleName as UserRole) || !provisionableRoles.includes(roleName as UserRole)) {
+    res.status(400).json({ success: false, message: 'Provide names, a valid email, a role, and a password of at least 10 characters' })
+    return
+  }
+  if (roleName === 'ADMIN' && req.user!.role !== 'ADMIN') {
+    res.status(403).json({ success: false, message: 'Only administrators can create another administrator' })
+    return
+  }
+
+  try {
+    const userId = await withTransaction(async (connection) => {
+      const id = await createSchoolUser(connection, {
+        roleName: roleName as UserRole,
+        firstName,
+        lastName,
+        email,
+        phone: phone || null,
+        password,
+        isActive,
+      })
+      await writeAuditLog(connection, req, 'USER_CREATED', 'user', id, { role: roleName, isActive })
+      return id
+    })
+    res.status(201).json({ success: true, userId, message: 'School account created' })
+  } catch (error) {
+    fail(res, 'create user', error)
+  }
+})
+
+router.patch('/users/:userId/password', async (req: AuthenticatedRequest, res) => {
+  const userId = parseUserId(req.params.userId)
+  const password = parsePassword(req.body?.password)
+  if (!userId || !password) {
+    res.status(400).json({ success: false, message: 'A valid user ID and a password of at least 10 characters are required' })
+    return
+  }
+  try {
+    const passwordHash = await hashPassword(password)
+    const result = await withTransaction(async (connection) => {
+      const [users] = await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId])
+      if (!(users as unknown[]).length) return false
+      await connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId])
+      await writeAuditLog(connection, req, 'USER_PASSWORD_RESET', 'user', userId, {})
+      return true
+    })
+    if (!result) {
+      res.status(404).json({ success: false, message: 'User not found' })
+      return
+    }
+    res.json({ success: true, message: 'Password updated' })
+  } catch (error) {
+    fail(res, 'reset password', error)
+  }
+})
 
 router.get('/users', async (_req, res) => {
   try {
@@ -220,12 +289,6 @@ router.patch('/users/:userId/status', async (req: AuthenticatedRequest, res) => 
 
       const wasActive = Boolean(target.isActive)
       if (wasActive === isActive) return { status: 200, message: 'Account status is unchanged' }
-      if (!wasActive && isActive && target.role !== 'ADMIN') {
-        return {
-          status: 409,
-          message: 'Portal accounts stay disabled until secure invitations are configured',
-        }
-      }
 
       if (wasActive && !isActive && target.role === 'ADMIN') {
         await connection.execute(

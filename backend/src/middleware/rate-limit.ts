@@ -46,7 +46,7 @@ export function createRateLimiter(windowMs: number, maxRequests: number): Reques
       res.setHeader('Retry-After', String(retryAfter))
       res.status(429).json({
         success: false,
-        message: 'Too many Google sign-in attempts. Please wait before trying again.',
+        message: 'Too many attempts. Please wait before trying again.',
       })
       return
     }

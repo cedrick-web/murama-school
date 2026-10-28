@@ -20,6 +20,10 @@ The administration UI uses browser-history routes, including direct-link and ref
 - `/admin/announcements`
 - `/admin/activity`
 - `/admin/settings`
+- `/signin` for school accounts using password or Google authentication
+- `/app/portal` for teachers, students, parents and staff
+- `/app/account` for changing the signed-in user's password
+- `/news`, `/events`, `/gallery` and `/contact` for public school content
 
 The Netlify SPA fallback serves the application for direct visits to these paths. Each admin module continues to use the authenticated Express API; the database credentials remain server-only.
 
@@ -27,13 +31,13 @@ The Netlify SPA fallback serves the application for direct visits to these paths
 - **Frontend:** React + TypeScript + Vite, public school information, admin dashboard, academic records, attendance, gradebook/report cards, timetable, finance and messaging screens.
 - **API:** Node.js + Express. Existing authenticated route contracts and school business rules remain in the API layer.
 - **Primary database:** Supabase-hosted PostgreSQL. All application API reads/writes and transaction workflows use the server-side PostgreSQL connection.
-- **Identity:** Existing school roles and active-account checks are still determined by the public.users and public.roles records. Supabase Auth verifies Google identity; a verified email is matched to an existing school account before the API issues the platform JWT.
+- **Identity:** Existing school roles and active-account checks are determined by the public.users and public.roles records. Every authenticated API request rechecks the current active account and role in PostgreSQL. Supabase Auth verifies Google identity; a verified email is matched to an existing school account before the API issues the platform JWT.
 - **Legacy importer:** mysql2 remains only for the explicit, one-time MySQL/XAMPP data transfer command.
 
 ## Supabase project setup
 
 1. Use the existing production Supabase project **muramaSDMS** (`ilmvmqxmasgasrtokjmz`, region `us-east-1`) and keep its database password private. Do not create a duplicate project.
-2. Copy **backend/.env.example** to **backend/.env**. Set **SUPABASE_DB_URL** to the Supabase **session pooler** URI from Dashboard → Connect, **SUPABASE_URL** to the project URL, **SUPABASE_PUBLISHABLE_KEY** to the publishable key, and a private **JWT_SECRET** of at least 32 characters. Do not use a service-role/secret key in frontend variables.
+2. Copy **backend/.env.example** to **backend/.env**. For a persistent local API, set **SUPABASE_DB_URL** to the Supabase **session pooler** URI from Dashboard → Connect; for Netlify, use the **Transaction pooler** URI as described below. Set **SUPABASE_URL** to the project URL, **SUPABASE_PUBLISHABLE_KEY** to the publishable key, and a private **JWT_SECRET** of at least 32 characters. Do not use a service-role/secret key in frontend variables.
 3. The initial school schema and performance/security hardening migrations have already been applied to this Supabase project. Their tracked files are in `supabase/migrations/`. To reconcile or apply later checked-in migrations from the repository root:
 
    ~~~powershell
@@ -45,7 +49,7 @@ The Netlify SPA fallback serves the application for direct visits to these paths
    Use a new/empty Supabase project for the initial baseline. The SQL migration creates all current school tables, indexes, identity-backed IDs, updated_at triggers, RLS protections, profile metadata policies and baseline roles/settings. It does not copy the contents of an existing XAMPP database.
 4. From **backend/**, run **npm install**, then **npm run create-admin** to create the first school administrator in the now-Supabase-backed application database.
 5. Copy **frontend/.env.example** to **frontend/.env.local** and set **VITE_API_URL**, **VITE_SUPABASE_URL**, and **VITE_SUPABASE_PUBLISHABLE_KEY**. These frontend values must never include the database connection string, a service-role key or the platform JWT secret.
-6. Start the API and frontend in separate terminals with **npm run dev**. The frontend runs on port 5173 and the API on port 5000 by default.
+6. Start the API and frontend in separate terminals with **npm run dev**. The frontend runs on port 5172 and the API on port 5000 by default.
 
 
 ## Netlify full-stack deployment
@@ -77,7 +81,7 @@ The original **database/xampp/murama_school_xampp.sql** and **database/schema.sq
 
 ## Functional workflows
 
-The admin APIs remain protected by authentication and the current ADMIN role check:
+The administration APIs require an active school account and an `ADMIN` or `HEADTEACHER` role, re-read from the database for every request:
 - Academic years, terms, classes, streams, subjects, users, roles, student roster and enrollment.
 - Attendance registers with explicit unmarked states and transactional audit events.
 - Assessments, score entry, score validation, normalized report-card averages, rank ties and attendance measures.
@@ -85,6 +89,7 @@ The admin APIs remain protected by authentication and the current ADMIN role che
 - Fee structures, assignment to actively enrolled students, balance reconciliation and transactional receipt-backed payments.
 - School messages, recipients, notification records and audit entries in a transaction.
 - Public school settings and published all-audience announcements.
+- News, event and gallery publishing, plus public contact inquiries with notifications and audit records.
 - Health checks at **/api/health** and **/api/health/database**.
 
 No synthetic student records, fake grades, pretend balances or sample counts are seeded. Fresh projects receive only the baseline role and site-setting records needed to initialize school administration.

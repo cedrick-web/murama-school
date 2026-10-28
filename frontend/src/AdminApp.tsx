@@ -82,7 +82,16 @@ const roles: UserRole[] = [
   'STUDENT',
   'PARENT',
 ]
-const tokenKey = 'murama-admin-token'
+const tokenKey = 'murama-session-token'
+const legacyTokenKey = 'murama-admin-token'
+
+function readStoredToken(): string | null {
+  return sessionStorage.getItem(tokenKey) ?? sessionStorage.getItem(legacyTokenKey)
+}
+
+function canManageSchool(role: UserRole): boolean {
+  return role === 'ADMIN' || role === 'HEADTEACHER'
+}
 
 function hasGoogleCallback(): boolean {
   const params = new URLSearchParams(window.location.search)
@@ -187,7 +196,7 @@ function sectionFromPath(pathname: string): AdminSection {
 }
 
 export default function AdminApp() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
+  const [token, setToken] = useState(readStoredToken)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [status, setStatus] = useState<'checking' | 'signed-out' | 'ready'>(
     token || hasGoogleCallback() ? 'checking' : 'signed-out',
@@ -248,10 +257,11 @@ export default function AdminApp() {
 
     finishGoogleSignIn(code)
       .then((result) => {
-        if (result.user.role !== 'ADMIN') {
+        if (!canManageSchool(result.user.role)) {
           throw new Error('This Google account is not an administrator. Contact the school administrator for access.')
         }
         sessionStorage.setItem(tokenKey, result.token)
+        sessionStorage.removeItem(legacyTokenKey)
         setPassword('')
         setToken(result.token)
         setOauthProcessing(false)
@@ -279,8 +289,9 @@ export default function AdminApp() {
     request<{ user: AuthUser }>('/api/auth/me', token)
       .then(({ user: currentUser }) => {
         if (!active) return
-        if (currentUser.role !== 'ADMIN') {
+        if (!canManageSchool(currentUser.role)) {
           sessionStorage.removeItem(tokenKey)
+          sessionStorage.removeItem(legacyTokenKey)
           setToken(null)
           setError('This area is available to administrators only.')
           return
@@ -291,6 +302,8 @@ export default function AdminApp() {
       .catch((reason: unknown) => {
         if (!active) return
         sessionStorage.removeItem(tokenKey)
+        sessionStorage.removeItem(tokenKey)
+        sessionStorage.removeItem(legacyTokenKey)
         setToken(null)
         setError(reason instanceof Error ? reason.message : 'Unable to verify your session')
       })
@@ -327,6 +340,7 @@ export default function AdminApp() {
 
   function signOut() {
     sessionStorage.removeItem(tokenKey)
+    sessionStorage.removeItem(legacyTokenKey)
     setToken(null)
     setUser(null)
     setUsers([])
@@ -344,6 +358,7 @@ export default function AdminApp() {
       })
       if (!result.token) throw new Error('The server did not return a login token')
       sessionStorage.setItem(tokenKey, result.token)
+      sessionStorage.removeItem(legacyTokenKey)
       setPassword('')
       setToken(result.token)
     } catch (reason) {

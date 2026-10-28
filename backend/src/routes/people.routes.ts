@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 
 import { isDatabaseUnavailable, pool } from '../config/database.js'
 import type { AuthenticatedRequest } from '../middleware/auth.js'
+import { parsePassword } from '../services/school-users.js'
 
 const router = Router()
 const studentStatuses = ['ACTIVE', 'INACTIVE', 'GRADUATED', 'TRANSFERRED'] as const
@@ -220,7 +221,7 @@ router.post('/students', async (req: AuthenticatedRequest, res) => {
   }
 
   try {
-    const id = await withTransaction(async (connection) => {
+    const created = await withTransaction(async (connection) => {
       const [roles] = await connection.execute(
         'SELECT id FROM roles WHERE name = ? LIMIT 1',
         ['STUDENT'],
@@ -228,10 +229,11 @@ router.post('/students', async (req: AuthenticatedRequest, res) => {
       const studentRole = (roles as Record<string, unknown>[])[0]
       if (!studentRole) throw new Error('STUDENT role is missing from the database')
 
-      const inaccessiblePassword = randomBytes(48).toString('base64url')
-      const passwordHash = await bcrypt.hash(inaccessiblePassword, 12)
+      const portalPassword = parsePassword(req.body?.portalPassword)
+      const passwordHash = await bcrypt.hash(portalPassword ?? randomBytes(48).toString('base64url'), 12)
+      const portalActive = Boolean(portalPassword)
       const [userResult] = await connection.execute(
-        'INSERT INTO users (role_id, first_name, last_name, email, phone, password_hash, is_active) VALUES (?, ?, ?, ?, ?, ?, FALSE)',
+        'INSERT INTO users (role_id, first_name, last_name, email, phone, password_hash, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [
           Number(studentRole.id),
           student.firstName,
@@ -239,6 +241,7 @@ router.post('/students', async (req: AuthenticatedRequest, res) => {
           student.email,
           student.phone,
           passwordHash,
+          portalActive,
         ],
       )
       const userId = Number((userResult as { insertId: number }).insertId)
@@ -260,14 +263,16 @@ router.post('/students', async (req: AuthenticatedRequest, res) => {
       const studentId = Number((studentResult as { insertId: number }).insertId)
       await audit(connection, req, 'STUDENT_CREATED', 'student', studentId, {
         admissionNumber: student.admissionNumber,
-        portalAccess: 'pending_invitation',
+        portalAccess: portalActive ? 'enabled' : 'disabled',
       })
-      return studentId
+      return { studentId, portalActive }
     })
     res.status(201).json({
       success: true,
-      student: { id, ...student, portalActive: false, portalStatus: 'PENDING_INVITATION' },
-      message: 'Student record created. Portal access stays disabled until secure invitations are configured.',
+      student: { id: created.studentId, ...student, portalActive: created.portalActive },
+      message: created.portalActive
+        ? 'Student record created with portal access enabled.'
+        : 'Student record created. Add a portal password later to enable student sign-in.',
     })
   } catch (error) {
     reportFailure(res, 'create student', error)

@@ -111,14 +111,20 @@ export async function checkDatabaseConnection(): Promise<void> {
 
 /** Identify database configuration/transport failures as retryable service-unavailable errors. */
 export function isDatabaseUnavailable(error: unknown): boolean {
-  const code = (error as { code?: string } | null)?.code
+  const code = (error as { code?: unknown } | null)?.code
+  if (typeof code !== 'string') return false
   return code === 'DB_NOT_CONFIGURED'
     || code === 'ECONNREFUSED'
+    || code === 'ECONNABORTED'
     || code === 'ECONNRESET'
     || code === 'ETIMEDOUT'
+    || code === 'ENOTFOUND'
+    || code === 'EAI_AGAIN'
+    || code === 'EHOSTUNREACH'
     || code === 'CONNECT_TIMEOUT'
-    || code === '08000'
-    || code === '08003'
-    || code === '08006'
+    || code.startsWith('08')
+    || code === '57P01'
+    || code === '57P02'
+    || code === '57P03'
     || code === '53300'
 }

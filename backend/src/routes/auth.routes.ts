@@ -1,6 +1,7 @@
 import { Router } from 'express'
 
-import { getUserById, login, loginWithVerifiedEmail } from '../services/auth.service.js'
+import { changePassword, login, loginWithVerifiedEmail } from '../services/auth.service.js'
+import { parsePassword } from '../services/school-users.js'
 import { isDatabaseUnavailable } from '../config/database.js'
 import { SupabaseAuthConfigurationError, verifyGoogleAccessToken } from '../services/supabase-auth.service.js'
 import { createRateLimiter } from '../middleware/rate-limit.js'
@@ -12,7 +13,7 @@ import {
 
 const router = Router()
 
-router.post('/login', async (req, res) => {
+router.post('/login', createRateLimiter(15 * 60 * 1000, 20), async (req, res) => {
   const email = typeof req.body?.email === 'string'
     ? req.body.email.trim().toLowerCase()
     : ''
@@ -46,6 +47,11 @@ router.post('/login', async (req, res) => {
     })
   } catch (error) {
     const unavailable = isDatabaseUnavailable(error)
+    if ((error as { code?: string } | null)?.code === 'JWT_NOT_CONFIGURED') {
+      console.error('Password sign-in is unavailable because JWT_SECRET is not configured')
+      res.status(503).json({ success: false, message: 'Authentication is not configured on the server yet.' })
+      return
+    }
     res.status(unavailable ? 503 : 500).json({
       success: false,
       message: unavailable ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to complete login',
@@ -101,26 +107,39 @@ router.post('/google', createRateLimiter(15 * 60 * 1000, 10), async (req, res) =
   }
 })
 
-router.get('/me', requireAuth, async (req: AuthenticatedRequest, res) => {
-  try {
-    const user = await getUserById(req.user!.id)
+router.post('/password', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : ''
+  const nextPassword = parsePassword(req.body?.newPassword)
+  if (!currentPassword || !nextPassword) {
+    res.status(400).json({
+      success: false,
+      message: 'Provide your current password and a new password of at least 10 characters',
+    })
+    return
+  }
 
-    if (!user) {
-      res.status(401).json({
-        success: false,
-        message: 'User account is no longer active',
-      })
+  try {
+    const result = await changePassword(req.user!.id, currentPassword, nextPassword)
+    if (result === 'missing') {
+      res.status(401).json({ success: false, message: 'User account is no longer active' })
       return
     }
-
-    res.json({ success: true, user })
+    if (result === 'invalid') {
+      res.status(401).json({ success: false, message: 'Current password is incorrect' })
+      return
+    }
+    res.json({ success: true, message: 'Password updated' })
   } catch (error) {
     const unavailable = isDatabaseUnavailable(error)
     res.status(unavailable ? 503 : 500).json({
       success: false,
-      message: unavailable ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to load the current user',
+      message: unavailable ? 'The school database is not configured or is temporarily unavailable.' : 'Unable to update password',
     })
   }
+})
+
+router.get('/me', requireAuth, (req: AuthenticatedRequest, res) => {
+  res.json({ success: true, user: req.user })
 })
 
 export default router

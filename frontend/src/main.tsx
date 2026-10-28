@@ -1,8 +1,25 @@
-import { StrictMode, useCallback, useEffect, useState } from 'react'
+import { StrictMode, lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import AdminApp from './AdminApp'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthProvider } from './lib/auth'
+import { RequireAuth, RequireManager } from './pages/workspace/Guard'
 import './tailwind.css'
 import './styles.css'
+
+const AdminApp = lazy(() => import('./AdminApp'))
+const SignInPage = lazy(() => import('./pages/auth/SignInPage'))
+const NewsPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.NewsPage })))
+const EventsPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.EventsPage })))
+const GalleryPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.GalleryPage })))
+const ContactPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.ContactPage })))
+const DashboardPage = lazy(() => import('./pages/workspace/LegacyModules').then((module) => ({ default: module.DashboardPage })))
+const StudentsPage = lazy(() => import('./pages/workspace/LegacyModules').then((module) => ({ default: module.StudentsPage })))
+const AcademicsPage = lazy(() => import('./pages/workspace/LegacyModules').then((module) => ({ default: module.AcademicsPage })))
+const OperationsPage = lazy(() => import('./pages/workspace/LegacyModules').then((module) => ({ default: module.OperationsPage })))
+const PortalPage = lazy(() => import('./pages/workspace/PortalPages').then((module) => ({ default: module.PortalPage })))
+const AccountPage = lazy(() => import('./pages/workspace/PortalPages').then((module) => ({ default: module.AccountPage })))
+const TeachersPage = lazy(() => import('./pages/workspace/DirectoryPage').then((module) => ({ default: module.TeachersPage })))
+const ParentsPage = lazy(() => import('./pages/workspace/DirectoryPage').then((module) => ({ default: module.ParentsPage })))
 
 type Language = 'en' | 'rw'
 
@@ -40,8 +57,11 @@ const copy = {
     navSchool: 'School information',
     navUpdates: 'Announcements',
     navContact: 'Contact',
+    navNews: 'News',
+    navEvents: 'Events',
+    navGallery: 'Gallery',
     switchLanguage: 'Kinyarwanda',
-    portal: 'Administration portal',
+    portal: 'School portal',
     eyebrow: 'ECOLE SECONDAIRE DE MURAMA',
     heroTitle: 'A school community, connected.',
     heroLead: 'Find the school information that has been published, follow official announcements, and reach the school through its verified contact details.',
@@ -71,9 +91,9 @@ const copy = {
     contactText: 'Use the contact details maintained by the school administration. If a detail is not shown, it has not been published in the school system.',
     contactSchool: 'Contact the school',
     openPortal: 'Open administration portal',
-    portalCaption: 'Restricted to authorised school administrators',
+    portalCaption: 'For authorised school accounts',
     footerLine: 'Official school information and published updates.',
-    footerLink: 'Administration',
+    footerLink: 'School portal',
     serviceLabel: 'Connected school information',
     actualData: 'Live school data',
     bilingual: 'English and Kinyarwanda',
@@ -86,8 +106,11 @@ const copy = {
     navSchool: 'Ibyerekeye ishuri',
     navUpdates: 'Amatangazo',
     navContact: 'Twandikire',
+    navNews: 'Amakuru',
+    navEvents: 'Ibirori',
+    navGallery: 'Amafoto',
     switchLanguage: 'English',
-    portal: 'Urubuga rw’ubuyobozi',
+    portal: 'Urubuga rw’ishuri',
     eyebrow: 'ECOLE SECONDAIRE DE MURAMA',
     heroTitle: 'Umuryango w’ishuri uhuje.',
     heroLead: 'Menya amakuru y’ishuri yashyizwe ahagaragara, ukurikirane amatangazo yemewe, kandi uvugane n’ishuri ukoresheje amakuru yaryo yo kurigeraho.',
@@ -116,10 +139,10 @@ const copy = {
     contactTitle: 'Ukeneye kuvugana n’ishuri?',
     contactText: 'Koresha amakuru yo kuvugana n’ishuri yashyizweho n’ubuyobozi. Amakuru atagaragara ntabwo arashyirwa muri sisitemu.',
     contactSchool: 'Vugana n’ishuri',
-    openPortal: 'Fungura urubuga rw’ubuyobozi',
-    portalCaption: 'Abayobozi b’ishuri bemerewe ni bo barukoresha',
+    openPortal: 'Fungura urubuga rw’ishuri',
+    portalCaption: 'Abafite konti z’ishuri bemerewe',
     footerLine: 'Amakuru yemewe y’ishuri n’amatangazo yashyizwe hanze.',
-    footerLink: 'Ubuyobozi',
+    footerLink: 'Urubuga rw’ishuri',
     serviceLabel: 'Amakuru y’ishuri ahujwe na sisitemu',
     actualData: 'Amakuru nyayo y’ishuri',
     bilingual: 'Icyongereza n’Ikinyarwanda',
@@ -197,6 +220,9 @@ function App() {
     { label: t.navSchool, href: '#school' },
     { label: t.navUpdates, href: '#updates' },
     { label: t.navContact, href: '#contact' },
+    { label: t.navNews, href: '/news' },
+    { label: t.navEvents, href: '/events' },
+    { label: t.navGallery, href: '/gallery' },
   ]
 
   return (
@@ -216,7 +242,7 @@ function App() {
           {menuItems.map((item) => (
             <a key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</a>
           ))}
-          <a className="public-nav-admin" href="/admin" onClick={() => setMenuOpen(false)}>{t.portal}<ArrowIcon /></a>
+          <a className="public-nav-admin" href="/signin" onClick={() => setMenuOpen(false)}>{t.portal}<ArrowIcon /></a>
           <button className="language-toggle" type="button" onClick={() => setLanguage(language === 'en' ? 'rw' : 'en')}>{t.switchLanguage}</button>
         </nav>
       </header>
@@ -342,7 +368,7 @@ function App() {
             {school.contactEmail && <a className="public-button primary" href={'mailto:' + school.contactEmail}>{t.contactEmail}<ArrowIcon /></a>}
             {school.contactPhone && <a className="public-button outline" href={'tel:' + school.contactPhone}>{t.contactPhone}<ArrowIcon /></a>}
             {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{missingSchoolDetail}</span>}
-            <a className="contact-admin-link" href="/admin">{t.openPortal}<ArrowIcon /></a>
+            <a className="contact-admin-link" href="/signin">{t.openPortal}<ArrowIcon /></a>
             <small>{t.portalCaption}</small>
           </div>
         </section>
@@ -351,14 +377,58 @@ function App() {
       <footer className="public-footer">
         <a className="footer-brand" href="#home"><SchoolMark /><span><strong>{schoolName}</strong><small>{t.footerLine}</small></span></a>
         <span className="footer-copyright">© {new Date().getFullYear()} {schoolName}</span>
-        <a className="footer-admin-link" href="/admin">{t.footerLink}<ArrowIcon /></a>
+        <a className="footer-admin-link" href="/signin">{t.footerLink}<ArrowIcon /></a>
       </footer>
     </div>
   )
 }
 
-const normalizedPath = window.location.pathname.replace(/\/+$/, '') || '/'
-const RootApp = /^\/admin(?:\/|$)/.test(normalizedPath) ? AdminApp : App
+function AuthenticatedWorkspace() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route element={<RequireAuth />}>
+          <Route path="portal" element={<PortalPage />} />
+          <Route path="account" element={<AccountPage />} />
+          <Route element={<RequireManager />}>
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="students/*" element={<StudentsPage />} />
+            <Route path="academics/*" element={<AcademicsPage />} />
+            <Route path="operations/*" element={<OperationsPage />} />
+            <Route path="users" element={<Navigate to="/admin/users" replace />} />
+            <Route path="teachers" element={<TeachersPage />} />
+            <Route path="parents" element={<ParentsPage />} />
+            <Route path="settings" element={<Navigate to="/admin/settings" replace />} />
+            <Route path="announcements" element={<Navigate to="/admin/announcements" replace />} />
+            <Route path="activity" element={<Navigate to="/admin/activity" replace />} />
+            <Route path="content" element={<Navigate to="/admin/announcements" replace />} />
+          </Route>
+        </Route>
+        <Route path="*" element={<Navigate to="/app/portal" replace />} />
+      </Routes>
+    </AuthProvider>
+  )
+}
+
+function RootApp() {
+  return (
+    <BrowserRouter>
+      <Suspense fallback={<div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Loading Murama School…</div>}>
+        <Routes>
+          <Route path="/" element={<App />} />
+          <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="/signin" element={<AuthProvider><SignInPage /></AuthProvider>} />
+          <Route path="/app/*" element={<AuthenticatedWorkspace />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/gallery" element={<GalleryPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  )
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
