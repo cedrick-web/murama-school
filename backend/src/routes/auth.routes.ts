@@ -94,7 +94,7 @@ router.post('/google', createDatabaseRateLimiter(15 * 60 * 1000, 10, 'google-sig
       },
     })
   } catch (error) {
-    if (error instanceof SupabaseAuthConfigurationError) {
+    if (error instanceof SupabaseAuthConfigurationError || (error as { code?: string } | null)?.code === 'JWT_NOT_CONFIGURED') {
       res.status(503).json({ success: false, message: 'Google sign-in is not configured on the server yet' })
       return
     }
@@ -107,7 +107,7 @@ router.post('/google', createDatabaseRateLimiter(15 * 60 * 1000, 10, 'google-sig
   }
 })
 
-router.post('/password', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.post('/password', requireAuth, createDatabaseRateLimiter(15 * 60 * 1000, 10, 'password-change'), async (req: AuthenticatedRequest, res) => {
   const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : ''
   const nextPassword = parsePassword(req.body?.newPassword)
   if (!currentPassword || !nextPassword) {

@@ -166,17 +166,20 @@ router.patch('/users/:userId/password', async (req: AuthenticatedRequest, res) =
   try {
     const passwordHash = await hashPassword(password)
     const result = await withTransaction(async (connection) => {
-      const [users] = await connection.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [userId])
-      if (!(users as unknown[]).length) return false
+      const [users] = await connection.execute(
+        'SELECT u.id, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? FOR UPDATE',
+        [userId],
+      )
+      const target = (users as Record<string, unknown>[])[0]
+      if (!target) return { status: 404, message: 'User not found' }
+      if (target.role === 'ADMIN' && req.user!.role !== 'ADMIN') {
+        return { status: 403, message: 'Only administrators can manage administrator accounts' }
+      }
       await connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId])
       await writeAuditLog(connection, req, 'USER_PASSWORD_RESET', 'user', userId, {})
-      return true
+      return { status: 200, message: 'Password updated' }
     })
-    if (!result) {
-      res.status(404).json({ success: false, message: 'User not found' })
-      return
-    }
-    res.json({ success: true, message: 'Password updated' })
+    res.status(result.status).json({ success: result.status < 400, message: result.message })
   } catch (error) {
     fail(res, 'reset password', error)
   }
@@ -229,7 +232,7 @@ router.post('/invitations', async (req: AuthenticatedRequest, res) => {
 
   let baseUrl: URL
   try {
-    baseUrl = new URL(process.env.FRONTEND_URL?.trim() || 'http://localhost:5173')
+    baseUrl = new URL(process.env.FRONTEND_URL?.trim() || 'http://localhost:5172')
   } catch {
     res.status(500).json({ success: false, message: 'FRONTEND_URL must be a valid absolute URL' })
     return
@@ -403,11 +406,14 @@ router.patch('/users/:userId/role', async (req: AuthenticatedRequest, res) => {
       if (!role) return { status: 400, message: 'Unknown role' }
 
       const [users] = await connection.execute(
-        'SELECT id, role_id AS roleId, is_active AS isActive FROM users WHERE id = ? FOR UPDATE',
+        'SELECT u.id, u.role_id AS roleId, u.is_active AS isActive, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE u.id = ? FOR UPDATE',
         [userId],
       )
       const target = (users as Record<string, unknown>[])[0]
       if (!target) return { status: 404, message: 'User not found' }
+      if (req.user!.role !== 'ADMIN' && (target.role === 'ADMIN' || roleName === 'ADMIN')) {
+        return { status: 403, message: 'Only administrators can manage administrator accounts' }
+      }
 
       const previousRoleId = Number(target.roleId)
       const nextRoleId = Number(role.id)
@@ -478,6 +484,9 @@ router.patch('/users/:userId/status', async (req: AuthenticatedRequest, res) => 
       )
       const target = (users as Record<string, unknown>[])[0]
       if (!target) return { status: 404, message: 'User not found' }
+      if (target.role === 'ADMIN' && req.user!.role !== 'ADMIN') {
+        return { status: 403, message: 'Only administrators can manage administrator accounts' }
+      }
 
       const wasActive = Boolean(target.isActive)
       if (wasActive === isActive) return { status: 200, message: 'Account status is unchanged' }

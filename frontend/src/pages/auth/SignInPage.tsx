@@ -45,8 +45,8 @@ export default function SignInPage() {
   }, [completeSession, setError])
 
   useEffect(() => {
-    if (status === 'ready' && user) navigate(homePathFor(user.role), { replace: true })
-  }, [status, user, navigate])
+    if (!oauthProcessing && status === 'ready' && user) navigate(homePathFor(user.role), { replace: true })
+  }, [status, user, navigate, oauthProcessing])
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { persistSchoolToken } from './school-session'
 
 export interface SchoolUser {
   id: number
@@ -68,7 +69,7 @@ const googleReturnKey = 'murama-google-return-path'
 
 export async function startGoogleSignIn(): Promise<void> {
   const supabase = getSupabaseClient()
-  const portalPath = ['/admin', '/teacher', '/portal'].find((path) => (
+  const portalPath = ['/admin', '/teacher', '/portal', '/staff'].find((path) => (
     window.location.pathname === path || window.location.pathname.startsWith(path + '/')
   ))
   if (portalPath) window.sessionStorage.setItem(googleReturnKey, portalPath)
@@ -86,9 +87,28 @@ export async function startGoogleSignIn(): Promise<void> {
   if (error) throw new Error('Unable to start Google sign-in: ' + error.message)
 }
 
-export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLogin> {
-  if (!code.trim()) throw new Error('The Google sign-in code is missing. Please start sign-in again.')
+let pendingCallback: { code: string; promise: Promise<VerifiedSchoolLogin> } | null = null
+
+/** StrictMode and callback re-renders must not exchange a single-use PKCE code twice. */
+export function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLogin> {
+  if (!code.trim()) return Promise.reject(new Error('The Google sign-in code is missing. Please start sign-in again.'))
+  if (pendingCallback?.code === code) return pendingCallback.promise
+  const promise = exchangeGoogleSession(code)
+  pendingCallback = { code, promise }
+  return promise
+}
+
+async function exchangeGoogleSession(code: string): Promise<VerifiedSchoolLogin> {
   const supabase = getSupabaseClient()
+  try { return await verifySchoolSession(supabase, code) }
+  finally {
+    // Supabase is an identity handoff, not a second long-lived school session.
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
+    if (error) console.warn('Unable to finish local identity-session cleanup')
+  }
+}
+
+async function verifySchoolSession(supabase: SupabaseClient, code: string): Promise<VerifiedSchoolLogin> {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
   if (error || !data.session?.access_token || !data.user) {
     throw new Error('Supabase could not complete Google sign-in. Check the provider and redirect URL configuration.')
@@ -131,16 +151,13 @@ export function cleanGoogleCallbackUrl(): void {
 export function restoreGooglePortalSession(user: SchoolUser, token: string): string | null {
   const requestedPath = window.sessionStorage.getItem(googleReturnKey)
   window.sessionStorage.removeItem(googleReturnKey)
-  const destination = requestedPath === '/admin' && ['ADMIN', 'HEADTEACHER'].includes(user.role)
-    ? { path: '/admin', tokenKey: 'murama-session-token' }
-    : requestedPath === '/teacher' && user.role === 'TEACHER'
-      ? { path: '/teacher', tokenKey: 'murama-teacher-token' }
-      : requestedPath === '/portal' && ['STUDENT', 'PARENT'].includes(user.role)
-        ? { path: '/portal', tokenKey: 'murama-portal-token' }
-        : null
-  if (!destination) return null
-  window.sessionStorage.setItem(destination.tokenKey, token)
-  return destination.path
+  const allowed = requestedPath === '/admin' && ['ADMIN', 'HEADTEACHER'].includes(user.role)
+    || requestedPath === '/teacher' && user.role === 'TEACHER'
+    || requestedPath === '/portal' && ['STUDENT', 'PARENT'].includes(user.role)
+    || requestedPath === '/staff' && ['STAFF', 'HEADTEACHER'].includes(user.role)
+  if (!allowed) return null
+  persistSchoolToken(token)
+  return requestedPath
 }
 
 export function getGoogleCallbackError(): string | null {

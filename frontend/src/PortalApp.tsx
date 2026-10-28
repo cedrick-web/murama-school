@@ -1,6 +1,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn, cleanGoogleCallbackUrl } from './lib/supabase-auth'
 import './portal.css'
+import { ApiError } from './lib/api'
+import { clearSchoolSession, persistSchoolToken, readSchoolToken } from './lib/school-session'
 
 type Role = 'ADMIN' | 'HEADTEACHER' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'STAFF'
 type PortalSection = 'overview' | 'results' | 'attendance' | 'timetable' | 'fees' | 'messages' | 'notifications'
@@ -32,7 +34,6 @@ interface ApiEnvelope {
   notifications?: RecordRow[]
 }
 
-const tokenKey = 'murama-portal-token'
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/$/, '')
 const sectionLabels: Record<PortalSection, string> = {
   overview: 'Overview',
@@ -55,7 +56,7 @@ async function apiRequest<T extends ApiEnvelope>(path: string, token?: string, o
   })
   const result = await response.json().catch(() => null) as T | null
   if (!response.ok || !result?.success) {
-    throw new Error(result?.message ?? `Request failed (${response.status})`)
+    throw new ApiError(result?.message ?? `Request failed (${response.status})`, response.status)
   }
   return result
 }
@@ -106,9 +107,9 @@ function SummaryCards({ values }: { values: Array<{ label: string; value: string
 }
 
 export default function PortalApp() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
+  const [token, setToken] = useState(() => readSchoolToken())
   const [user, setUser] = useState<PortalUser | null>(null)
-  const [authChecking, setAuthChecking] = useState(Boolean(sessionStorage.getItem(tokenKey)))
+  const [authChecking, setAuthChecking] = useState(Boolean(readSchoolToken()))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
@@ -135,7 +136,7 @@ export default function PortalApp() {
   }, [])
 
   const signOut = useCallback(() => {
-    sessionStorage.removeItem(tokenKey)
+    clearSchoolSession()
     setToken(null)
     setUser(null)
     setChildren([])
@@ -170,7 +171,7 @@ export default function PortalApp() {
         if (!['STUDENT', 'PARENT'].includes(result.user.role)) {
           throw new Error('This portal is for student and parent accounts. Use the administration portal for school staff.')
         }
-        sessionStorage.setItem(tokenKey, result.token)
+        persistSchoolToken(result.token)
         setToken(result.token)
         setUser(result.user)
         window.history.replaceState({}, '', routeForRole(result.user.role))
@@ -204,8 +205,10 @@ export default function PortalApp() {
       })
       .catch((reason: unknown) => {
         if (!active) return
-        sessionStorage.removeItem(tokenKey)
-        setToken(null)
+        if (reason instanceof ApiError && reason.status === 401) {
+          clearSchoolSession()
+          setToken(null)
+        }
         setUser(null)
         setAuthError(reason instanceof Error ? reason.message : 'Your session could not be verified')
       })
@@ -278,7 +281,7 @@ export default function PortalApp() {
       if (!['STUDENT', 'PARENT'].includes(identity.role)) {
         throw new Error('This portal is for student and parent accounts. School staff should use the administration portal.')
       }
-      sessionStorage.setItem(tokenKey, result.token)
+      persistSchoolToken(result.token)
       setPassword('')
       setToken(result.token)
       setUser(identity)

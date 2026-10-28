@@ -73,7 +73,7 @@ export function createRequireAuth(findActiveUser: ActiveUserLookup = getUserById
 
     let payload: JwtPayload
     try {
-      const verified = jwt.verify(token, secret)
+      const verified = jwt.verify(token, secret, { algorithms: ['HS256'] })
       if (
         typeof verified !== 'object'
         || !Number.isSafeInteger(verified.userId)

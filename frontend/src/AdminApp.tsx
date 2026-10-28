@@ -8,6 +8,8 @@ import './admin.css'
 import './admin-modern.css'
 import './invitation-admin.css'
 import './people-management.css'
+import { ApiError } from './lib/api'
+import { clearSchoolSession, persistSchoolToken, readSchoolToken } from './lib/school-session'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =
@@ -123,7 +125,7 @@ const tokenKey = 'murama-session-token'
 const legacyTokenKey = 'murama-admin-token'
 
 function readStoredToken(): string | null {
-  return sessionStorage.getItem(tokenKey) ?? sessionStorage.getItem(legacyTokenKey)
+  return readSchoolToken()
 }
 
 function canManageSchool(role: UserRole): boolean {
@@ -152,7 +154,7 @@ async function request<T extends ApiResponse>(
   const body: ApiResponse | null = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(body?.message ?? `Request failed (${response.status})`)
+    throw new ApiError(body?.message ?? `Request failed (${response.status})`, response.status)
   }
 
   if (!body?.success) {
@@ -313,7 +315,7 @@ export default function AdminApp() {
         if (!canManageSchool(result.user.role)) {
           throw new Error('This Google account is not an administrator. Contact the school administrator for access.')
         }
-        sessionStorage.setItem(tokenKey, result.token)
+        persistSchoolToken(result.token)
         sessionStorage.removeItem(legacyTokenKey)
         setPassword('')
         setToken(result.token)
@@ -343,9 +345,10 @@ export default function AdminApp() {
       .then(({ user: currentUser }) => {
         if (!active) return
         if (!canManageSchool(currentUser.role)) {
-          sessionStorage.removeItem(tokenKey)
-          sessionStorage.removeItem(legacyTokenKey)
+          clearSchoolSession()
           setToken(null)
+          setUser(null)
+          setStatus('signed-out')
           setError('This area is available to administrators only.')
           return
         }
@@ -354,10 +357,12 @@ export default function AdminApp() {
       })
       .catch((reason: unknown) => {
         if (!active) return
-        sessionStorage.removeItem(tokenKey)
-        sessionStorage.removeItem(tokenKey)
-        sessionStorage.removeItem(legacyTokenKey)
-        setToken(null)
+        if (reason instanceof ApiError && reason.status === 401) {
+          clearSchoolSession()
+          setToken(null)
+        }
+        setUser(null)
+        setStatus('signed-out')
         setError(reason instanceof Error ? reason.message : 'Unable to verify your session')
       })
 
@@ -431,11 +436,11 @@ export default function AdminApp() {
   }, [status, token])
 
   function signOut() {
-    sessionStorage.removeItem(tokenKey)
-    sessionStorage.removeItem(legacyTokenKey)
+    clearSchoolSession()
     setToken(null)
     setUser(null)
     setUsers([])
+    setStatus('signed-out')
     setError('')
   }
 
@@ -444,13 +449,13 @@ export default function AdminApp() {
     setError('')
 
     try {
-      const result = await request<{ token: string }>('/api/auth/login', undefined, {
+      const result = await request<{ token: string; user: AuthUser }>('/api/auth/login', undefined, {
         method: 'POST',
         body: JSON.stringify({ email: email.trim(), password }),
       })
       if (!result.token) throw new Error('The server did not return a login token')
-      sessionStorage.setItem(tokenKey, result.token)
-      sessionStorage.removeItem(legacyTokenKey)
+      if (!result.user || !canManageSchool(result.user.role)) throw new Error('This area is available to administrators only.')
+      persistSchoolToken(result.token)
       setPassword('')
       setToken(result.token)
     } catch (reason) {

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { api } from './api'
+import { api, ApiError } from './api'
+import { clearSchoolSession, persistSchoolToken, readSchoolToken, schoolHomePath } from './school-session'
 
 export type UserRole = 'ADMIN' | 'HEADTEACHER' | 'TEACHER' | 'STUDENT' | 'PARENT' | 'STAFF'
 
@@ -12,12 +13,7 @@ export interface AuthUser {
   role: UserRole
 }
 
-const TOKEN_KEY = 'murama-session-token'
-const LEGACY_TOKEN_KEY = 'murama-admin-token'
-
-function readStoredToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(LEGACY_TOKEN_KEY)
-}
+const readStoredToken = readSchoolToken
 
 interface AuthContextValue {
   token: string | null
@@ -39,19 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
 
   const persistToken = useCallback((next: string | null) => {
-    if (next) {
-      sessionStorage.setItem(TOKEN_KEY, next)
-      sessionStorage.removeItem(LEGACY_TOKEN_KEY)
-    } else {
-      sessionStorage.removeItem(TOKEN_KEY)
-      sessionStorage.removeItem(LEGACY_TOKEN_KEY)
-    }
+    if (next) persistSchoolToken(next)
+    else clearSchoolSession()
     setToken(next)
   }, [])
 
   const completeSession = useCallback(async (nextToken: string) => {
-    persistToken(nextToken)
     const result = await api<{ user: AuthUser }>('/api/auth/me', { token: nextToken })
+    persistToken(nextToken)
     setUser(result.user)
     setStatus('ready')
     setError('')
@@ -73,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((reason: unknown) => {
         if (!active) return
-        persistToken(null)
+        if (reason instanceof ApiError && reason.status === 401) persistToken(null)
         setUser(null)
         setStatus('signed-out')
         setError(reason instanceof Error ? reason.message : 'Unable to verify your session')
@@ -119,7 +110,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export function homePathFor(role: UserRole): string {
-  return role === 'ADMIN' || role === 'HEADTEACHER' ? '/app/dashboard' : '/app/portal'
+  return schoolHomePath(role)
 }
 
 export function canManageSchool(role: UserRole | undefined): boolean {

@@ -2,6 +2,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn, cleanGoogleCallbackUrl } from './lib/supabase-auth'
 import './portal.css'
 import './teacher.css'
+import { ApiError } from './lib/api'
+import { clearSchoolSession, persistSchoolToken, readSchoolToken } from './lib/school-session'
 
 type TeacherSection = 'overview' | 'classes' | 'timetable' | 'assessments' | 'attendance' | 'messages' | 'notifications'
 type ApiRecord = Record<string, unknown>
@@ -75,7 +77,6 @@ interface ApiResult {
   messages?: ApiRecord[]
   notifications?: ApiRecord[]
 }
-const tokenKey = 'murama-teacher-token'
 const sectionLabels: Record<TeacherSection, string> = {
   overview: 'Overview',
   classes: 'My classes',
@@ -118,7 +119,7 @@ async function request<T extends ApiResult>(path: string, token?: string, option
     },
   })
   const result = await response.json().catch(() => null) as T | null
-  if (!response.ok || !result?.success) throw new Error(result?.message ?? `Request failed (${response.status})`)
+  if (!response.ok || !result?.success) throw new ApiError(result?.message ?? `Request failed (${response.status})`, response.status)
   return result
 }
 function TeacherTable({ rows, emptyText }: { rows: ApiRecord[]; emptyText: string }) {
@@ -132,9 +133,9 @@ function TeacherTable({ rows, emptyText }: { rows: ApiRecord[]; emptyText: strin
 }
 
 export default function TeacherApp() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
+  const [token, setToken] = useState(() => readSchoolToken())
   const [user, setUser] = useState<TeacherUser | null>(null)
-  const [authChecking, setAuthChecking] = useState(Boolean(sessionStorage.getItem(tokenKey)))
+  const [authChecking, setAuthChecking] = useState(Boolean(readSchoolToken()))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
@@ -172,7 +173,7 @@ export default function TeacherApp() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const signOut = useCallback(() => {
-    sessionStorage.removeItem(tokenKey)
+    clearSchoolSession()
     setToken(null)
     setUser(null)
     setTeacher(null)
@@ -210,7 +211,7 @@ export default function TeacherApp() {
     finishGoogleSignIn(code)
       .then((result) => {
         if (result.user.role !== 'TEACHER') throw new Error('This workspace is for teacher accounts. Use the portal assigned to your school role.')
-        sessionStorage.setItem(tokenKey, result.token)
+        persistSchoolToken(result.token)
         setToken(result.token)
         setUser(result.user)
         window.history.replaceState({}, '', redirectForRole(result.user.role))
@@ -236,8 +237,10 @@ export default function TeacherApp() {
       })
       .catch((reason: unknown) => {
         if (!active) return
-        sessionStorage.removeItem(tokenKey)
-        setToken(null)
+        if (reason instanceof ApiError && reason.status === 401) {
+          clearSchoolSession()
+          setToken(null)
+        }
         setUser(null)
         setAuthError(reason instanceof Error ? reason.message : 'Your session could not be verified')
       })
@@ -339,7 +342,7 @@ export default function TeacherApp() {
       if (!result.token) throw new Error('The server did not return a login token')
       const identity = result.user ?? (await request<{ user: TeacherUser }>('/api/auth/me', result.token)).user
       if (identity.role !== 'TEACHER') throw new Error('This workspace is for teacher accounts only.')
-      sessionStorage.setItem(tokenKey, result.token)
+      persistSchoolToken(result.token)
       setPassword('')
       setToken(result.token)
       setUser(identity)

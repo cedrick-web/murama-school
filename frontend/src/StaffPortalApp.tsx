@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import './staff-portal.css'
+import { ApiError } from './lib/api'
+import { clearSchoolSession, persistSchoolToken, readSchoolToken } from './lib/school-session'
 
 type Role = 'HEADTEACHER' | 'STAFF'
 type Section = 'overview' | 'timetable' | 'classes' | 'messages' | 'notifications'
@@ -26,7 +28,6 @@ interface ApiResponse {
   messages?: Array<Record<string, unknown>>
   notifications?: Array<Record<string, unknown>>
 }
-const tokenKey = 'murama-staff-token'
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/$/, '')
 const sections: Array<{ id: Section; title: string; icon: string }> = [
   { id: 'overview', title: 'Overview', icon: '⌂' },
@@ -45,7 +46,7 @@ async function request<T extends ApiResponse>(path: string, token?: string, opti
     },
   })
   const result = await response.json().catch(() => null) as T | null
-  if (!response.ok || !result?.success) throw new Error(result?.message ?? 'Request failed (' + response.status + ')')
+  if (!response.ok || !result?.success) throw new ApiError(result?.message ?? 'Request failed (' + response.status + ')', response.status)
   return result
 }
 function display(value: unknown): string {
@@ -64,11 +65,11 @@ function formatDate(value: unknown): string {
   return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat('en-RW', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 export default function StaffPortalApp() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(tokenKey))
+  const [token, setToken] = useState(() => readSchoolToken())
   const [user, setUser] = useState<User | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [authLoading, setAuthLoading] = useState(Boolean(sessionStorage.getItem(tokenKey)))
+  const [authLoading, setAuthLoading] = useState(Boolean(readSchoolToken()))
   const [busy, setBusy] = useState(false)
   const [authError, setAuthError] = useState('')
   const [error, setError] = useState('')
@@ -82,7 +83,7 @@ export default function StaffPortalApp() {
   const [refresh, setRefresh] = useState(0)
 
   const signOut = useCallback(() => {
-    sessionStorage.removeItem(tokenKey)
+    clearSchoolSession()
     setToken(null)
     setUser(null)
     setOverview(null)
@@ -106,14 +107,16 @@ export default function StaffPortalApp() {
       .then(({ user: current }) => {
         if (!active) return
         if (!['HEADTEACHER', 'STAFF'].includes(current.role)) {
-          throw new Error('This workspace is for teachers and school staff. Use the appropriate school portal for your account.')
+          throw new ApiError('This workspace is for teachers and school staff. Use the appropriate school portal for your account.', 403)
         }
         setUser(current)
       })
       .catch((reason: unknown) => {
         if (!active) return
-        sessionStorage.removeItem(tokenKey)
-        setToken(null)
+        if (reason instanceof ApiError && [401, 403].includes(reason.status)) {
+          clearSchoolSession()
+          setToken(null)
+        }
         setUser(null)
         setAuthError(reason instanceof Error ? reason.message : 'Unable to verify your session')
       })
@@ -154,7 +157,7 @@ export default function StaffPortalApp() {
       if (!['HEADTEACHER', 'STAFF'].includes(result.user.role)) {
         throw new Error('This workspace is for teachers and school staff. Use the appropriate school portal for your account.')
       }
-      sessionStorage.setItem(tokenKey, result.token)
+      persistSchoolToken(result.token)
       setPassword('')
       setUser(result.user)
       setToken(result.token)
