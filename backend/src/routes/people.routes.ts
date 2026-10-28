@@ -466,4 +466,190 @@ router.patch('/enrollments/:enrollmentId/status', async (req: AuthenticatedReque
   }
 })
 
+router.get('/parents', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT p.id, p.occupation, p.address, u.id AS userId, u.first_name AS firstName, u.last_name AS lastName, u.email, u.phone, u.is_active AS portalActive, COUNT(DISTINCT sp.student_id) AS linkedStudents FROM parents p INNER JOIN users u ON u.id = p.user_id LEFT JOIN student_parents sp ON sp.parent_id = p.id GROUP BY p.id, p.occupation, p.address, u.id, u.first_name, u.last_name, u.email, u.phone, u.is_active ORDER BY u.last_name, u.first_name',
+    )
+    res.json({ success: true, parents: rows })
+  } catch (error) {
+    reportFailure(res, 'load parents', error)
+  }
+})
+
+router.post('/parents', async (req: AuthenticatedRequest, res) => {
+  const firstName = parseText(req.body?.firstName, 100)
+  const lastName = parseText(req.body?.lastName, 100)
+  const email = parseText(req.body?.email, 190)?.toLowerCase() ?? null
+  const phone = parseOptionalText(req.body?.phone, 30)
+  const occupation = parseOptionalText(req.body?.occupation, 150)
+  const address = parseOptionalText(req.body?.address, 255)
+  if (!firstName || !lastName || !email || phone === undefined || occupation === undefined || address === undefined || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ success: false, message: 'Provide valid parent names, email and optional contact details' })
+    return
+  }
+
+  try {
+    const parent = await withTransaction(async (connection) => {
+      const [roles] = await connection.execute('SELECT id FROM roles WHERE name = ? LIMIT 1', ['PARENT'])
+      const parentRole = (roles as Record<string, unknown>[])[0]
+      if (!parentRole) throw new Error('PARENT role is missing from the database')
+      const inaccessiblePassword = randomBytes(48).toString('base64url')
+      const passwordHash = await bcrypt.hash(inaccessiblePassword, 12)
+      const [userResult] = await connection.execute(
+        'INSERT INTO users (role_id, first_name, last_name, email, phone, password_hash, is_active) VALUES (?, ?, ?, ?, ?, ?, FALSE)',
+        [Number(parentRole.id), firstName, lastName, email, phone, passwordHash],
+      )
+      const userId = Number((userResult as { insertId: number }).insertId)
+      await connection.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', [userId, Number(parentRole.id)])
+      const [parentResult] = await connection.execute(
+        'INSERT INTO parents (user_id, occupation, address) VALUES (?, ?, ?)',
+        [userId, occupation, address],
+      )
+      const parentId = Number((parentResult as { insertId: number }).insertId)
+      await audit(connection, req, 'PARENT_CREATED', 'parent', parentId, { userId, portalAccess: 'pending_invitation' })
+      return { id: parentId, userId, firstName, lastName, email, phone, occupation, address, portalActive: false, portalStatus: 'PENDING_INVITATION' }
+    })
+    res.status(201).json({ success: true, parent, message: 'Parent record created. Create a secure invitation to link a student and activate portal access.' })
+  } catch (error) {
+    reportFailure(res, 'create parent', error)
+  }
+})
+
+router.get('/teachers', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT t.id, t.employee_number AS employeeNumber, t.qualification, t.department, u.id AS userId, u.first_name AS firstName, u.last_name AS lastName, u.email, u.phone, u.is_active AS portalActive, COUNT(DISTINCT ts.id) AS assignmentsCount FROM teachers t INNER JOIN users u ON u.id = t.user_id LEFT JOIN teacher_subjects ts ON ts.teacher_id = t.id GROUP BY t.id, t.employee_number, t.qualification, t.department, u.id, u.first_name, u.last_name, u.email, u.phone, u.is_active ORDER BY u.last_name, u.first_name',
+    )
+    res.json({ success: true, teachers: rows })
+  } catch (error) {
+    reportFailure(res, 'load teachers', error)
+  }
+})
+
+router.post('/teachers', async (req: AuthenticatedRequest, res) => {
+  const firstName = parseText(req.body?.firstName, 100)
+  const lastName = parseText(req.body?.lastName, 100)
+  const email = parseText(req.body?.email, 190)?.toLowerCase() ?? null
+  const phone = parseOptionalText(req.body?.phone, 30)
+  const employeeNumber = parseOptionalText(req.body?.employeeNumber, 50)
+  const qualification = parseOptionalText(req.body?.qualification, 255)
+  const department = parseOptionalText(req.body?.department, 150)
+  if (!firstName || !lastName || !email || phone === undefined || employeeNumber === undefined || qualification === undefined || department === undefined || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ success: false, message: 'Provide valid teacher names, email and optional professional details' })
+    return
+  }
+
+  try {
+    const teacher = await withTransaction(async (connection) => {
+      const [roles] = await connection.execute('SELECT id FROM roles WHERE name = ? LIMIT 1', ['TEACHER'])
+      const teacherRole = (roles as Record<string, unknown>[])[0]
+      if (!teacherRole) throw new Error('TEACHER role is missing from the database')
+      const inaccessiblePassword = randomBytes(48).toString('base64url')
+      const passwordHash = await bcrypt.hash(inaccessiblePassword, 12)
+      const [userResult] = await connection.execute(
+        'INSERT INTO users (role_id, first_name, last_name, email, phone, password_hash, is_active) VALUES (?, ?, ?, ?, ?, ?, FALSE)',
+        [Number(teacherRole.id), firstName, lastName, email, phone, passwordHash],
+      )
+      const userId = Number((userResult as { insertId: number }).insertId)
+      await connection.execute('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)', [userId, Number(teacherRole.id)])
+      const [teacherResult] = await connection.execute(
+        'INSERT INTO teachers (user_id, employee_number, qualification, department) VALUES (?, ?, ?, ?)',
+        [userId, employeeNumber, qualification, department],
+      )
+      const teacherId = Number((teacherResult as { insertId: number }).insertId)
+      await audit(connection, req, 'TEACHER_CREATED', 'teacher', teacherId, { userId, portalAccess: 'pending_invitation' })
+      return { id: teacherId, userId, firstName, lastName, email, phone, employeeNumber, qualification, department, portalActive: false, portalStatus: 'PENDING_INVITATION', assignmentsCount: 0 }
+    })
+    res.status(201).json({ success: true, teacher, message: 'Teacher record created. Assign classes and subjects, then create a secure invitation.' })
+  } catch (error) {
+    reportFailure(res, 'create teacher', error)
+  }
+})
+
+router.get('/teacher-assignments', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      'SELECT ts.id, ts.teacher_id AS teacherId, CONCAT_WS(\' \', tu.first_name, tu.last_name) AS teacherName, t.employee_number AS employeeNumber, ts.class_id AS classId, c.name AS className, ts.subject_id AS subjectId, sub.code AS subjectCode, sub.name AS subjectName, ts.academic_year_id AS academicYearId, ay.name AS academicYear FROM teacher_subjects ts INNER JOIN teachers t ON t.id = ts.teacher_id INNER JOIN users tu ON tu.id = t.user_id INNER JOIN classes c ON c.id = ts.class_id INNER JOIN subjects sub ON sub.id = ts.subject_id INNER JOIN academic_years ay ON ay.id = ts.academic_year_id ORDER BY ay.is_current DESC, ay.starts_on DESC, c.name, sub.name, teacherName',
+    )
+    res.json({ success: true, assignments: rows })
+  } catch (error) {
+    reportFailure(res, 'load teacher assignments', error)
+  }
+})
+
+router.post('/teacher-assignments', async (req: AuthenticatedRequest, res) => {
+  const teacherId = parseId(req.body?.teacherId)
+  const classId = parseId(req.body?.classId)
+  const subjectId = parseId(req.body?.subjectId)
+  const academicYearId = parseId(req.body?.academicYearId)
+  if (!teacherId || !classId || !subjectId || !academicYearId) {
+    res.status(400).json({ success: false, message: 'Choose a teacher, class, subject and academic year' })
+    return
+  }
+
+  try {
+    const assignment = await withTransaction(async (connection) => {
+      const [teachers] = await connection.execute('SELECT id FROM teachers WHERE id = ? LIMIT 1', [teacherId])
+      const [classes] = await connection.execute('SELECT id FROM classes WHERE id = ? LIMIT 1', [classId])
+      const [subjects] = await connection.execute('SELECT id FROM subjects WHERE id = ? LIMIT 1', [subjectId])
+      const [years] = await connection.execute('SELECT id FROM academic_years WHERE id = ? LIMIT 1', [academicYearId])
+      if (!(teachers as Record<string, unknown>[]).length || !(classes as Record<string, unknown>[]).length || !(subjects as Record<string, unknown>[]).length || !(years as Record<string, unknown>[]).length) {
+        return { ok: false as const, status: 404, message: 'One or more selected school records were not found' }
+      }
+      const [existing] = await connection.execute(
+        'SELECT id FROM teacher_subjects WHERE teacher_id = ? AND class_id = ? AND subject_id = ? AND academic_year_id = ? LIMIT 1',
+        [teacherId, classId, subjectId, academicYearId],
+      )
+      if ((existing as Record<string, unknown>[]).length) {
+        return { ok: false as const, status: 409, message: 'This teacher is already assigned to that class, subject and academic year' }
+      }
+      const [insertResult] = await connection.execute(
+        'INSERT INTO teacher_subjects (teacher_id, class_id, subject_id, academic_year_id) VALUES (?, ?, ?, ?)',
+        [teacherId, classId, subjectId, academicYearId],
+      )
+      const assignmentId = Number((insertResult as { insertId: number }).insertId)
+      await audit(connection, req, 'TEACHER_ASSIGNMENT_CREATED', 'teacher_subject', assignmentId, { teacherId, classId, subjectId, academicYearId })
+      return { ok: true as const, id: assignmentId }
+    })
+    if (!assignment.ok) {
+      res.status(assignment.status).json({ success: false, message: assignment.message })
+      return
+    }
+    res.status(201).json({ success: true, assignmentId: assignment.id, message: 'Teacher assignment created' })
+  } catch (error) {
+    reportFailure(res, 'create teacher assignment', error)
+  }
+})
+
+router.delete('/teacher-assignments/:assignmentId', async (req: AuthenticatedRequest, res) => {
+  const assignmentId = parseId(req.params.assignmentId)
+  if (!assignmentId) {
+    res.status(400).json({ success: false, message: 'A valid teacher assignment ID is required' })
+    return
+  }
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, teacher_id AS teacherId, class_id AS classId, subject_id AS subjectId, academic_year_id AS academicYearId FROM teacher_subjects WHERE id = ? LIMIT 1 FOR UPDATE',
+        [assignmentId],
+      )
+      const assignment = (rows as Record<string, unknown>[])[0]
+      if (!assignment) return { ok: false as const, status: 404, message: 'Teacher assignment not found' }
+      await connection.execute('DELETE FROM teacher_subjects WHERE id = ?', [assignmentId])
+      await audit(connection, req, 'TEACHER_ASSIGNMENT_REMOVED', 'teacher_subject', assignmentId, {
+        teacherId: Number(assignment.teacherId), classId: Number(assignment.classId), subjectId: Number(assignment.subjectId), academicYearId: Number(assignment.academicYearId),
+      })
+      return { ok: true as const }
+    })
+    if (!result.ok) {
+      res.status(result.status).json({ success: false, message: result.message })
+      return
+    }
+    res.json({ success: true, message: 'Teacher assignment removed' })
+  } catch (error) {
+    reportFailure(res, 'remove teacher assignment', error)
+  }
+})
+
 export default router

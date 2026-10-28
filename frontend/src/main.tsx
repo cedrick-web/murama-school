@@ -3,10 +3,16 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './lib/auth'
 import { RequireAuth, RequireManager } from './pages/workspace/Guard'
+import VisitRequestForm from './VisitRequestForm'
+import MediaGallery from './MediaGallery'
 import './tailwind.css'
 import './styles.css'
 
 const AdminApp = lazy(() => import('./AdminApp'))
+const PortalApp = lazy(() => import('./PortalApp'))
+const TeacherApp = lazy(() => import('./TeacherApp'))
+const StaffPortalApp = lazy(() => import('./StaffPortalApp'))
+const InvitationAcceptApp = lazy(() => import('./InvitationAcceptApp'))
 const SignInPage = lazy(() => import('./pages/auth/SignInPage'))
 const NewsPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.NewsPage })))
 const EventsPage = lazy(() => import('./pages/public/ContentPages').then((module) => ({ default: module.EventsPage })))
@@ -218,6 +224,7 @@ function App() {
   const menuItems = [
     { label: t.navHome, href: '#home' },
     { label: t.navSchool, href: '#school' },
+    { label: language === 'en' ? 'Gallery' : 'Amafoto na videwo', href: '#gallery' },
     { label: t.navUpdates, href: '#updates' },
     { label: t.navContact, href: '#contact' },
     { label: t.navNews, href: '/news' },
@@ -325,6 +332,8 @@ function App() {
           </div>
         </section>
 
+        <MediaGallery language={language} />
+
         <section className="public-updates-section" id="updates">
           <div className="public-updates-header">
             <div className="public-section-heading">
@@ -358,6 +367,8 @@ function App() {
           )}
         </section>
 
+        <VisitRequestForm language={language} />
+
         <section className="public-contact-section" id="contact">
           <div className="contact-section-copy">
             <span className="section-kicker">{language === 'en' ? 'GET IN TOUCH' : 'TWANDIKIRE'}</span>
@@ -369,6 +380,8 @@ function App() {
             {school.contactPhone && <a className="public-button outline" href={'tel:' + school.contactPhone}>{t.contactPhone}<ArrowIcon /></a>}
             {!school.contactEmail && !school.contactPhone && <span className="contact-not-published">{missingSchoolDetail}</span>}
             <a className="contact-admin-link" href="/signin">{t.openPortal}<ArrowIcon /></a>
+            <a className="contact-admin-link" href="/portal">{language === 'en' ? 'Student & parent portal' : 'Urubuga rw’abanyeshuri n’ababyeyi'}<ArrowIcon /></a>
+            <a className="contact-admin-link" href="/teacher">{language === 'en' ? 'Teacher workspace' : 'Urubuga rw’abarimu'}<ArrowIcon /></a>
             <small>{t.portalCaption}</small>
           </div>
         </section>
@@ -417,6 +430,10 @@ function RootApp() {
         <Routes>
           <Route path="/" element={<App />} />
           <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="/portal/*" element={<PortalApp />} />
+          <Route path="/teacher/*" element={<TeacherApp />} />
+          <Route path="/staff/*" element={<StaffPortalApp />} />
+          <Route path="/invite/*" element={<InvitationAcceptApp />} />
           <Route path="/signin" element={<AuthProvider><SignInPage /></AuthProvider>} />
           <Route path="/app/*" element={<AuthenticatedWorkspace />} />
           <Route path="/news" element={<NewsPage />} />

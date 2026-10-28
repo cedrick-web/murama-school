@@ -75,7 +75,15 @@ If the school already has records in MySQL, take a full backup of that database 
 npm run migrate:mysql-to-supabase
 ~~~
 
-The migration command copies real rows in foreign-key order, preserves primary keys, updates identity sequences, maps MySQL boolean fields to PostgreSQL booleans, and is safe to re-run for interrupted transfers when the source remains authoritative. It reports missing legacy tables explicitly. Run it during a write freeze, compare source/target row counts, verify attendance/grades/fee balances and payment receipts, and do not direct production traffic until the reconciliation is accepted. Supabase Auth users/password credentials and Auth profiles are not copied; identity configuration remains a separate step.
+The default command is a **read-only preflight**: it checks source/target table presence, column compatibility and row counts without writing to Supabase. Review every result and resolve any schema mismatch before proceeding. Back up the source and destination, freeze source writes, then explicitly enable write mode only when ready:
+
+~~~powershell
+$env:MIGRATION_ALLOW_WRITES = "true"
+npm run migrate:mysql-to-supabase -- --apply
+Remove-Item Env:MIGRATION_ALLOW_WRITES
+~~~
+
+Apply mode upserts rows in foreign-key order, preserves primary keys, updates identity sequences, maps MySQL boolean fields to PostgreSQL booleans, and commits each table in its own transaction. It verifies source/destination row counts and stops with a reconciliation error if counts differ. A failed run can leave earlier tables committed, so resolve the reported issue and rerun against the still-authoritative source; the importer does not delete destination-only records. Do not direct production traffic until counts and samples from attendance, grades, report cards, fee balances and payment receipts have been accepted. Supabase Auth identities are not created by this script and must be configured and tested separately.
 
 The original **database/xampp/murama_school_xampp.sql** and **database/schema.sql** are retained as legacy MySQL/XAMPP source definitions and data-migration references. They are no longer the application runtime database schema; the runtime baseline is in **supabase/migrations/**.
 
@@ -116,3 +124,78 @@ npm run build
 ~~~
 
 The SQL translation regression tests run without a live database. Build and unit tests do not replace an end-to-end pass against the school's own Supabase project, real imported records, provider configuration and user accounts. No Supabase project credentials are stored in this repository.
+
+## Secure student, parent and teacher account invitations
+
+The administrator workspace can create a one-time invitation for an existing **inactive** student, parent or teacher account. The school fixes the email and role; the invitee only chooses a password. Parent invitations also require an administrator-verified student relationship. Teacher invitations require an existing teacher profile linked to the account. Invitation tokens are stored as SHA-256 hashes, expire within 1–168 hours, can be revoked, and are accepted once.
+
+Before using this workflow against Supabase:
+
+1. Apply the migration `supabase/migrations/20261026162842_account_invitations.sql` to the target database using the project's reviewed Supabase migration workflow.
+2. Ensure `FRONTEND_URL` is set to the canonical frontend origin (for example, the production Netlify URL). Invitation links use this origin.
+3. In the admin workspace, open **Users**, select an eligible inactive student, parent or teacher account, and create the invitation. Parent invitations also require a linked student and relationship.
+4. Copy the returned link and deliver it privately to the intended account holder. The raw token is not stored or shown again; issuing a replacement revokes older pending invitations for that account.
+5. Test token expiry, single-use acceptance, revocation, wrong-role attempts, and parent-child isolation using dedicated test accounts before production rollout.
+
+Email delivery is not configured yet, so administrators must share the generated link manually. The invitation API intentionally does not create school records or assign roles from user input. Create the student, parent or teacher record first using the school data/admin workflow, then invite its existing inactive account.
+
+
+## School visit request workflow
+
+The public school site includes an English/Kinyarwanda visit-request form. Visitors provide their name, at least one contact method, visitor type, a preferred date, an optional time, and the purpose of the visit. Public submissions are validated server-side and rate-limited; a requested date is not treated as a confirmed appointment.
+
+The administrator workspace exposes the queue at **Administration → School operations → Visit requests**. Administrators can filter by status, record follow-up notes, and move requests through **NEW**, **CONTACTED**, **CONFIRMED**, **COMPLETED**, or **CANCELLED**. Every status change is recorded in the audit log.
+
+Before enabling this workflow on a database, apply `supabase/migrations/20261026170119_school_visit_requests.sql` through the reviewed Supabase migration workflow. The table has RLS enabled and direct browser-role access revoked; application access is through the server-side API. Automated email or SMS delivery is not yet configured, so administrators must contact visitors using the details they submitted.
+
+
+## School photo and video gallery
+
+The public site displays only media items in the `PUBLISHED` state. Administrators can upload JPEG, PNG, WebP, AVIF, MP4 and WebM files up to 25 MB, add accessible alt text and descriptions, review the upload, publish it, archive it, or delete it. Public pages never read unpublished metadata from the database.
+
+The workflow uses a short-lived Supabase Storage signed-upload token so the browser uploads directly to Storage instead of sending large video files through a Netlify Function. The Supabase service-role key is required only by the server to create signed upload tokens, verify uploaded objects, and delete stored objects. Keep it in the backend/Netlify Function environment only; never expose it in a `VITE_` variable or commit its real value.
+
+Before enabling media uploads, apply `supabase/migrations/20261026170134_school_media_gallery.sql` to the target Supabase project. The migration creates the `school-media` bucket and the media metadata table, configures allowed MIME types and a 25 MB object limit, enables RLS, and revokes direct browser-role access to metadata. Set `SUPABASE_SERVICE_ROLE_KEY` in the backend and `VITE_SUPABASE_URL` plus `VITE_SUPABASE_PUBLISHABLE_KEY` in the frontend. The storage bucket remains private. The public API creates expiring signed read URLs only for records in the `PUBLISHED` state; unpublished files are never exposed through the public gallery API.
+
+
+## Supabase security and invitation indexes
+
+The migrations `supabase/migrations/20261026170532_profiles_policy_and_invitation_indexes.sql` and `supabase/migrations/20261026170712_profiles_policy_initplan.sql` restrict optional Google identity profiles to their own permanent Supabase Auth identity, explicitly excluding anonymous Auth sessions, optimize policy claim lookups, and add indexes for the invitation creator and linked-student foreign keys. School records remain server-accessed through the Express API; direct `anon` and `authenticated` table grants remain revoked for the school-management tables.
+
+The migration `supabase/migrations/20261026170628_media_visit_foreign_key_indexes.sql` adds indexes for the media uploader and visit-request handler foreign keys identified by the live Supabase performance advisor.
+
+
+
+## Authorized end-to-end smoke tests
+
+The backend includes an opt-in smoke test for a deployed API. It checks readiness, student sign-in and own-record access, parent sign-in and linked-child access, and (when configured) parent-child isolation. Run it only against staging or an explicitly approved production test window using dedicated test accounts, never ordinary student/parent credentials.
+
+From the `backend` directory, set `SMOKE_BASE_URL`, `SMOKE_STUDENT_EMAIL`, `SMOKE_STUDENT_PASSWORD`, `SMOKE_PARENT_EMAIL`, and `SMOKE_PARENT_PASSWORD` in your local shell or CI secret store. To test denial for an unrelated student, also set `SMOKE_UNLINKED_STUDENT_ID` to a valid student ID not linked to the test parent. Then run `npm run smoke:e2e`. The script never prints passwords or access tokens and is not part of default CI because it requires authorized accounts and a deployed target. To additionally exercise invitation creation, validation and revocation, set `SMOKE_ADMIN_EMAIL`, `SMOKE_ADMIN_PASSWORD`, and `SMOKE_INACTIVE_STUDENT_EMAIL` for a dedicated active admin plus an existing inactive student test account. This optional flow revokes its test invitation and does not activate the account.
+
+
+## Production environment configuration checklist
+
+The Netlify site needs runtime/build variables before authentication, the API database, and media storage can be considered live-ready. Configure these in **Netlify → Site configuration → Environment variables**. Do not commit actual secrets.
+
+| Variable | Scope | Purpose |
+| --- | --- | --- |
+| `SUPABASE_DB_URL` | Functions/runtime, secret | Supabase PostgreSQL transaction-pooler connection URI (port 6543, SSL required) |
+| `SUPABASE_URL` | Functions/runtime | `https://ilmvmqxmasgasrtokjmz.supabase.co` |
+| `SUPABASE_PUBLISHABLE_KEY` | Functions/runtime | Project publishable key used to validate Supabase Auth identities |
+| `SUPABASE_SERVICE_ROLE_KEY` | Functions/runtime, secret | Server-only signed media uploads, verification, reads and deletes |
+| `JWT_SECRET` | Functions/runtime, secret | Cryptographically random secret of at least 32 characters |
+| `FRONTEND_URL` | Functions/runtime | `https://murama-school.netlify.app` |
+| `VITE_SUPABASE_URL` | Build | Supabase project URL for browser Google sign-in |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Build | Project publishable key for browser Google sign-in |
+
+Leave `VITE_API_URL` empty for the current same-origin Netlify API rewrite. Never set a service-role key, database URI, or JWT signing secret under a `VITE_` variable. Configure Google as an Auth provider in Supabase and allow the production callback URLs before testing OAuth.
+
+After setting variables, trigger a new deploy and call `/api/health/ready`. Then run `npm run smoke:e2e` from `backend` with dedicated student/parent test accounts; optionally configure the admin/inactive-student variables to test invitation creation, validation and revocation. The readiness endpoint and automated checks cannot supply missing credentials or prove that Google OAuth is configured in the Supabase dashboard.
+
+## Production readiness probe
+
+Use `GET /api/health/ready` as the deployment readiness check. It returns HTTP 200 only when the database is reachable, `JWT_SECRET` meets the minimum length, and server-side Supabase media storage is configured. A degraded response identifies component names only and never returns secret values. Keep the existing `/api/health` and `/api/health/database` endpoints for existing diagnostics. Before production rollout, run this probe against the actual Netlify runtime and verify image/video upload, publish, read and delete with a dedicated test account.
+
+## Live data readiness
+
+The Supabase schema can exist while school data is still empty. Before production use, confirm the correct source database, take a backup, run the migration/import process, reconcile table counts and relationships, create the first administrator securely, and test with authorized real school accounts. A successful frontend/backend build or Netlify preview is not proof that production school records have been imported.

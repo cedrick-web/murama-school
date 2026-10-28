@@ -1,0 +1,37 @@
+.teacher-notice { margin: 0 0 17px; padding: 12px 14px; border: 1px solid #cfe7d7; border-radius: 9px; background: #f1faf4; color: #286c4d; font-size: 12px; line-height: 1.6; }
+.teacher-class-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-bottom: 26px; }
+.teacher-class-card { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 15px; border: 1px solid #e1eae4; border-radius: 11px; background: #fff; color: #193c30; text-align: left; }
+.teacher-class-card:hover, .teacher-class-card.is-selected { border-color: #8ec6a9; background: #f8fcf9; box-shadow: 0 4px 16px #164a3208; }
+.teacher-class-mark { display: grid; flex: 0 0 auto; width: 39px; height: 39px; place-items: center; border-radius: 10px; background: #e2f3e8; color: #1d6a4e; font-size: 16px; font-weight: 850; }
+.teacher-class-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.teacher-class-copy strong { font-size: 12px; }
+.teacher-class-copy small { color: #6e8077; font-size: 10px; }
+.teacher-roster-heading { display: flex; align-items: center; justify-content: space-between; gap: 13px; margin: 24px 0 13px; }
+.teacher-roster-heading h3 { margin: 0; color: #1b3f32; font-size: 15px; }
+.teacher-roster-heading p { margin: 5px 0 0; color: #6b7d73; font-size: 11px; }
+.teacher-roster-heading select, .teacher-attendance-controls select, .teacher-attendance-controls input, .teacher-assessment-select select { min-width: 150px; min-height: 38px; padding: 8px 10px; border: 1px solid #dce7df; border-radius: 8px; background: #fff; color: #203f33; font: inherit; font-size: 11px; }
+.teacher-form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 12px; }
+.teacher-form-grid label, .teacher-assessment-select label, .teacher-attendance-controls label, .teacher-mark-row label, .teacher-attendance-row label { display: grid; min-width: 0; gap: 7px; color: #52665d; font-size: 10px; font-weight: 800; }
+.teacher-form-grid input, .teacher-form-grid select, .teacher-mark-row input, .teacher-attendance-row input, .teacher-attendance-row select { width: 100%; min-width: 0; min-height: 38px; padding: 9px 10px; border: 1px solid #dce7df; border-radius: 8px; outline: none; background: #fff; color: #203f33; font: inherit; font-size: 11px; }
+.teacher-form-grid input:focus, .teacher-form-grid select:focus, .teacher-mark-row input:focus, .teacher-attendance-row input:focus, .teacher-attendance-row select:focus { border-color: #4d9b78; box-shadow: 0 0 0 3px #e0f2e7; }
+.teacher-primary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 39px; padding: 10px 14px; border: 1px solid #176a50; border-radius: 8px; background: #176a50; color: #fff; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.teacher-primary-button:hover { background: #10553f; }
+.teacher-primary-button:disabled { cursor: not-allowed; opacity: .6; }
+.teacher-assessment-select { max-width: 570px; margin: 5px 0 20px; }
+.teacher-assessment-select label { gap: 8px; }
+.teacher-assessment-select select { width: 100%; }
+.teacher-marks-form { margin-top: 22px; padding-top: 16px; border-top: 1px solid #e5eee8; }
+.teacher-marks-list, .teacher-attendance-list { display: grid; }
+.teacher-mark-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(110px, .45fr) minmax(180px, 1fr); align-items: end; gap: 13px; padding: 12px 0; border-bottom: 1px solid #edf2ee; }
+.teacher-mark-student { display: grid; gap: 5px; align-self: center; }
+.teacher-mark-student strong, .teacher-attendance-row strong { color: #294a3d; font-size: 12px; }
+.teacher-mark-student small, .teacher-attendance-row small { color: #819087; font-size: 10px; }
+.teacher-attendance-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; padding: 14px; border: 1px solid #e0ebe4; border-radius: 11px; background: #f8fbf9; }
+.teacher-attendance-controls label { gap: 7px; }
+.teacher-attendance-row { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(120px, .5fr) minmax(180px, .8fr); align-items: end; gap: 13px; padding: 12px 0; border-bottom: 1px solid #edf2ee; }
+.teacher-attendance-row > div { display: grid; align-self: center; gap: 5px; }
+.teacher-attendance-row .teacher-primary-button { margin-top: 15px; }
+.teacher-attendance-list + .teacher-primary-button { margin-top: 18px; }
+@media (max-width: 1050px) { .teacher-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .teacher-class-grid { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .teacher-form-grid { grid-template-columns: 1fr 1fr; } .teacher-attendance-controls { grid-template-columns: 1fr; } .teacher-mark-row, .teacher-attendance-row { grid-template-columns: 1fr 1fr; } .teacher-mark-student, .teacher-attendance-row > div { grid-column: 1 / -1; } .teacher-roster-heading { align-items: flex-start; flex-direction: column; } .teacher-roster-heading select { width: 100%; } }
+@media (max-width: 430px) { .teacher-form-grid { grid-template-columns: 1fr; } .teacher-mark-row, .teacher-attendance-row { grid-template-columns: 1fr; } .teacher-mark-student, .teacher-attendance-row > div { grid-column: auto; } .teacher-mark-row label, .teacher-attendance-row label { width: 100%; } }

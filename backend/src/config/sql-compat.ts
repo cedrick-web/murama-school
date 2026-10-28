@@ -26,6 +26,9 @@ const idReturningTables = new Set([
   'streams',
   'subjects',
   'users',
+  'parents',
+  'teachers',
+  'teacher_subjects',
   'students',
   'student_enrollments',
   'assessments',
@@ -33,13 +36,14 @@ const idReturningTables = new Set([
   'fee_structures',
   'payments',
   'messages',
-  'teachers',
-  'parents',
   'staff',
   'news',
   'events',
   'gallery_items',
   'school_inquiries',
+  'account_invitations',
+  'school_visit_requests',
+  'school_media_items',
 ])
 
 function rewriteDuplicateKeyUpsert(input: string): string {

@@ -1,9 +1,10 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import './operations.css'
 
-type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages'
+type Tab = 'attendance' | 'gradebook' | 'timetable' | 'finance' | 'messages' | 'visits' | 'media'
 
-const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages']
+const operationTabs: Tab[] = ['attendance', 'gradebook', 'timetable', 'finance', 'messages', 'visits', 'media']
 
 function operationsTabFromPath(pathname: string): Tab {
   const segment = pathname.replace(/\/+$/, '').split('/')[3]
@@ -33,6 +34,8 @@ interface FeeItem { id: number; studentId: number; admissionNumber: string; firs
 interface Payment { id: number; receiptNumber: string; admissionNumber: string; firstName: string; lastName: string; amount: number | string; paymentMethod: PaymentMethod; reference: string | null; paidAt: string }
 interface MessageRecord { id: number; subject: string; body: string; sentAt: string; senderName: string; recipientCount: number; readCount: number | null }
 interface Recipient { userId: number; firstName: string; lastName: string; email: string | null; role: Role; readAt: string | null }
+interface VisitRequest { id: number; fullName: string; email: string | null; phone: string | null; visitorType: string; preferredDate: string; preferredTime: string | null; purpose: string; status: 'NEW' | 'CONTACTED' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'; responseNote: string | null; handledAt: string | null; handledBy: string | null; createdAt: string }
+interface MediaItem { id: number; title: string; altText: string; description: string | null; category: string; mediaType: 'IMAGE' | 'VIDEO'; objectPath: string; publicUrl: string; mimeType: string; sizeBytes: number; status: 'UPLOADING' | 'READY' | 'PUBLISHED' | 'ARCHIVED'; publishedAt: string | null; createdAt: string; canComplete?: boolean }
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5000')).replace(/\/+$/, '')
 async function api<T>(path: string, token: string, options: RequestInit = {}): Promise<T> {
@@ -111,6 +114,8 @@ export default function OperationsPanel({ token }: { token: string }) {
     { id: 'timetable', title: 'Timetable', sub: 'Periods & teacher slots', number: '03' },
     { id: 'finance', title: 'Fees & payments', sub: 'Balances & receipts', number: '04' },
     { id: 'messages', title: 'Messaging', sub: 'School communication', number: '05' },
+    { id: 'visits', title: 'Visit requests', sub: 'Appointments & follow-up', number: '06' },
+    { id: 'media', title: 'School media', sub: 'Photos & video gallery', number: '07' },
   ]
   return <div className="operations-workspace">
     <section className="operations-banner"><div><span className="operations-eyebrow">LIVE SCHOOL OPERATIONS</span><h2>Run the school day.</h2><p>Record attendance, manage assessments, build the timetable, follow fee balances and send official messages using the school's PostgreSQL-backed API.</p></div><span className="operations-live-pill"><i /> Connected workflows</span></section>
@@ -126,9 +131,262 @@ export default function OperationsPanel({ token }: { token: string }) {
         {tab === 'timetable' && <TimetableModule token={token} />}
         {tab === 'finance' && <FinanceModule token={token} />}
         {tab === 'messages' && <MessagesModule token={token} />}
+        {tab === 'visits' && <VisitsModule token={token} />}
+        {tab === 'media' && <MediaModule token={token} />}
       </section>
     </div>
   </div>
+}
+
+
+
+function MediaModule({ token }: { token: string }) {
+  const [status, setStatus] = useState('ALL')
+  const [media, setMedia] = useState<MediaItem[]>([])
+  const [title, setTitle] = useState('')
+  const [altText, setAltText] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('SCHOOL_LIFE')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = status === 'ALL' ? '' : '?status=' + encodeURIComponent(status)
+      const result = await api<{ media: MediaItem[] }>('/api/admin/media' + query, token)
+      setMedia(result.media)
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setLoading(false)
+    }
+  }, [status, token])
+  useEffect(() => { void load() }, [load])
+
+  async function finishUpload(mediaId: number) {
+    await api('/api/admin/media/' + mediaId + '/complete', token, { method: 'POST' })
+    setNotice('Upload verified. Review the item and publish it when it is ready for the public gallery.')
+    await load()
+  }
+
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setNotice('')
+    if (!file) {
+      setError('Choose a photo or video file first.')
+      return
+    }
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'video/mp4', 'video/webm']
+    if (!allowed.includes(file.type)) {
+      setError('Use JPEG, PNG, WebP, AVIF, MP4 or WebM media.')
+      return
+    }
+    if (file.size < 1 || file.size > 25 * 1024 * 1024) {
+      setError('The file must be smaller than or equal to 25 MB.')
+      return
+    }
+    if (file.type.startsWith('image/') && !altText.trim()) {
+      setError('Add descriptive alt text for accessibility before uploading an image.')
+      return
+    }
+    setUploading(true)
+    let mediaId: number | null = null
+    try {
+      const intent = await api<{ upload: { mediaId: number; objectPath: string; uploadToken: string } }>('/api/admin/media/upload-intent', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.trim(),
+          altText: altText.trim(),
+          description: description.trim(),
+          category,
+          mimeType: file.type,
+          sizeBytes: file.size,
+        }),
+      })
+      mediaId = intent.upload.mediaId
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim()
+      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()
+      if (!supabaseUrl || !publishableKey) throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to enable school media uploads.')
+      const client = createClient(supabaseUrl, publishableKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      })
+      const { error: storageError } = await client.storage
+        .from('school-media')
+        .uploadToSignedUrl(intent.upload.objectPath, intent.upload.uploadToken, file, {
+          contentType: file.type,
+          cacheControl: '3600',
+        })
+      if (storageError) throw new Error('Storage upload failed: ' + storageError.message)
+      await finishUpload(mediaId)
+      setTitle('')
+      setAltText('')
+      setDescription('')
+      setCategory('SCHOOL_LIFE')
+      setFile(null)
+    } catch (reason) {
+      const message = messageOf(reason)
+      if (mediaId !== null) setNotice('If the file finished uploading, use the Uploading item below to retry verification or delete the incomplete record.')
+      await load()
+      setError(message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+
+  async function retryVerify(item: MediaItem) {
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await finishUpload(item.id)
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function changeStatus(item: MediaItem, nextStatus: 'READY' | 'PUBLISHED' | 'ARCHIVED') {
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/media/' + item.id + '/status', token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      setNotice(nextStatus === 'PUBLISHED' ? 'Media published to the public school gallery.' : 'Media status updated.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function remove(item: MediaItem) {
+    if (!window.confirm('Delete “' + item.title + '” and its stored file? This cannot be undone.')) return
+    setBusyId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/media/' + item.id, token, { method: 'DELETE' })
+      setNotice('Media item deleted.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return <section className="operations-section">
+    <div className="operations-section-heading"><div><h4>School photo and video gallery</h4><p>Upload original school media, review it, then publish only approved items. Public visitors can see published items only.</p></div><button type="button" className="operations-button secondary" disabled={loading} onClick={() => void load()}>Refresh</button></div>
+    <form className="media-admin-upload" onSubmit={upload}>
+      <div className="media-admin-upload-heading"><span className="operations-eyebrow">NEW GALLERY ITEM</span><h4>Upload school media</h4><p>JPEG, PNG, WebP, AVIF, MP4 or WebM · Maximum 25 MB per file</p></div>
+      {error && <div className="operations-state is-error" role="alert">{error}</div>}
+      {notice && <div className="operations-notice" role="status">{notice}</div>}
+      <div className="operations-form-grid">
+        <Field label="Display title"><input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180} required placeholder="e.g. School science exhibition" /></Field>
+        <Field label="Category"><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="SCHOOL_LIFE">School life</option><option value="EVENT">Event</option><option value="CAMPUS">Campus</option><option value="ANNOUNCEMENT">Announcement</option><option value="OTHER">Other</option></select></Field>
+        <Field label="Alt text (required for photos)"><input value={altText} onChange={(event) => setAltText(event.target.value)} maxLength={300} placeholder="Describe the photo for screen readers" /></Field>
+        <Field label="Description (optional)"><textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={2000} rows={2} placeholder="Context for parents and students" /></Field>
+        <Field label="Photo or video file"><input type="file" accept="image/jpeg,image/png,image/webp,image/avif,video/mp4,video/webm" onChange={(event) => setFile(event.target.files?.[0] ?? null)} required /></Field>
+        <div className="media-admin-file-summary"><strong>{file?.name ?? 'No file selected'}</strong><small>{file ? fmtNumber(file.size / 1024 / 1024) + ' MB' : 'Choose a file from your device'}</small></div>
+      </div>
+      <button className="operations-button primary" type="submit" disabled={uploading}>{uploading ? 'Uploading and verifying…' : 'Upload for review'}</button>
+      <p className="media-admin-security-note">Uploads use short-lived signed tokens. The service-role key stays on the server. Files are not visible publicly until an administrator publishes them.</p>
+    </form>
+    <div className="operations-section-heading media-admin-list-heading"><div><h4>Published and pending media</h4><p>Review, publish, archive or remove gallery items.</p></div><Field label="Filter status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="ALL">All statuses</option><option value="UPLOADING">Uploading</option><option value="READY">Ready for review</option><option value="PUBLISHED">Published</option><option value="ARCHIVED">Archived</option></select></Field></div>
+    <State loading={loading} empty={!loading && !media.length ? 'No media items match this filter.' : undefined} retry={() => void load()} />
+    {!loading && media.length > 0 && <div className="media-admin-grid">{media.map((item) => <article className="media-admin-card" key={item.id}>
+      <div className="media-admin-preview">{item.status === 'UPLOADING' ? <span>UPLOAD IN PROGRESS</span> : item.mediaType === 'VIDEO' ? <video controls preload="metadata"><source src={item.publicUrl} type={item.mimeType} /></video> : <img src={item.publicUrl} alt={item.altText || item.title} loading="lazy" />}</div>
+      <div className="media-admin-card-body"><div className="media-admin-card-meta"><span>{item.mediaType} · {item.category.replace(/_/g, ' ')}</span><span className={'visit-admin-status status-' + item.status.toLowerCase()}>{item.status}</span></div><h4>{item.title}</h4>{item.description && <p>{item.description}</p>}<small>{fmtNumber(item.sizeBytes / 1024 / 1024)} MB · {shortDate(item.createdAt)}</small>
+        <div className="media-admin-actions">{item.status === 'UPLOADING' && item.canComplete && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void retryVerify(item)}>Verify upload</button>}{item.status === 'READY' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish</button>}{item.status === 'PUBLISHED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'ARCHIVED')}>Archive</button>}{item.status === 'ARCHIVED' && <button className="operations-button primary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'PUBLISHED')}>Publish again</button>}{item.status !== 'UPLOADING' && item.status !== 'READY' && item.status !== 'PUBLISHED' && item.status !== 'ARCHIVED' && <button className="operations-button secondary" type="button" disabled={busyId === item.id} onClick={() => void changeStatus(item, 'READY')}>Mark ready</button>}<button className="operations-button danger" type="button" disabled={busyId === item.id} onClick={() => void remove(item)}>{busyId === item.id ? 'Working…' : 'Delete'}</button></div>
+      </div>
+    </article>)}</div>}
+  </section>
+}
+
+function VisitsModule({ token }: { token: string }) {
+  const [status, setStatus] = useState('NEW')
+  const [requests, setRequests] = useState<VisitRequest[]>([])
+  const [edits, setEdits] = useState<Record<number, { status: VisitRequest['status']; responseNote: string }>>({})
+  const [loading, setLoading] = useState(true)
+  const [savingId, setSavingId] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const query = status === 'ALL' ? '' : '?status=' + encodeURIComponent(status)
+      const result = await api<{ requests: VisitRequest[] }>('/api/admin/visits' + query, token)
+      setRequests(result.requests)
+      setEdits((current) => {
+        const next = { ...current }
+        for (const item of result.requests) {
+          if (!next[item.id]) next[item.id] = { status: item.status, responseNote: item.responseNote ?? '' }
+        }
+        return next
+      })
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setLoading(false)
+    }
+  }, [status, token])
+
+  useEffect(() => { void load() }, [load])
+
+  async function save(item: VisitRequest) {
+    const edit = edits[item.id]
+    if (!edit) return
+    setSavingId(item.id)
+    setError('')
+    setNotice('')
+    try {
+      await api('/api/admin/visits/' + item.id, token, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: edit.status, responseNote: edit.responseNote }),
+      })
+      setNotice('Visit request #' + item.id + ' updated.')
+      await load()
+    } catch (reason) {
+      setError(messageOf(reason))
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const countNew = requests.filter((item) => item.status === 'NEW').length
+  return <section className="operations-section">
+    <div className="operations-section-heading"><div><h4>School visit requests</h4><p>Review visit enquiries, record follow-up, and confirm or close appointments. A submitted request is not automatically a confirmed visit.</p></div><button type="button" className="operations-button secondary" disabled={loading} onClick={() => void load()}>Refresh</button></div>
+    <div className="operations-form-grid">
+      <Field label="Filter by status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="NEW">New requests</option><option value="CONTACTED">Contacted</option><option value="CONFIRMED">Confirmed</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option><option value="ALL">All requests</option></select></Field>
+      <div className="operations-inline-note"><strong>{countNew}</strong><span>new request(s) in this view</span></div>
+    </div>
+    {notice && <div className="operations-notice" role="status">{notice}</div>}
+    <State loading={loading} error={error} empty={!loading && !requests.length ? 'No visit requests match this filter.' : undefined} retry={() => void load()} />
+    {!loading && requests.map((item) => {
+      const edit = edits[item.id] ?? { status: item.status, responseNote: item.responseNote ?? '' }
+      return <article className="operations-section visit-admin-card" key={item.id}>
+        <div className="operations-section-heading"><div><h4>{item.fullName}</h4><p>Request #{item.id} · {item.visitorType.replace(/_/g, ' ')} · Received {shortDate(item.createdAt)}</p></div><span className={'visit-admin-status status-' + item.status.toLowerCase()}>{item.status}</span></div>
+        <div className="visit-admin-details"><div><small>Preferred date</small><strong>{shortDate(item.preferredDate)}{item.preferredTime ? ' · ' + item.preferredTime : ''}</strong></div><div><small>Contact</small><strong>{item.email || 'No email'}{item.phone ? ' · ' + item.phone : ''}</strong></div><div className="visit-admin-purpose"><small>Purpose</small><p>{item.purpose}</p></div></div>
+        <div className="operations-form-grid visit-admin-controls"><Field label="Request status"><select value={edit.status} onChange={(event) => setEdits((current) => ({ ...current, [item.id]: { ...edit, status: event.target.value as VisitRequest['status'] } }))}><option value="NEW">New</option><option value="CONTACTED">Contacted</option><option value="CONFIRMED">Confirmed</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select></Field><Field label="Response / internal follow-up note"><textarea rows={2} maxLength={3000} value={edit.responseNote} onChange={(event) => setEdits((current) => ({ ...current, [item.id]: { ...edit, responseNote: event.target.value } }))} placeholder="Record the contact outcome or appointment details" /></Field><button className="operations-button primary" type="button" disabled={savingId === item.id} onClick={() => void save(item)}>{savingId === item.id ? 'Saving…' : 'Save update'}</button></div>
+        {item.handledBy && <p className="visit-admin-meta">Last updated by {item.handledBy}{item.handledAt ? ' · ' + shortDate(item.handledAt) : ''}</p>}
+      </article>
+    })}
+  </section>
 }
 
 function AttendanceModule({ token }: { token: string }) {

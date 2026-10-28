@@ -3,8 +3,11 @@ import AcademicPanel from './AcademicPanel'
 import StudentsPanel from './StudentsPanel'
 import DashboardPanel from './DashboardPanel'
 import OperationsPanel from './OperationsPanel'
+import PeoplePanel from './PeoplePanel'
 import './admin.css'
 import './admin-modern.css'
+import './invitation-admin.css'
+import './people-management.css'
 import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from './lib/supabase-auth'
 
 type UserRole =
@@ -32,12 +35,46 @@ interface AdminUser extends AuthUser {
 interface ApiResponse {
   success?: boolean
   message?: string
+  invitation?: CreatedInvitation
+  invitations?: AccountInvitation[]
+  students?: InvitationStudent[]
   token?: string
   user?: AuthUser
   users?: AdminUser[]
   settings?: SchoolSettings
   announcements?: Announcement[]
   logs?: AuditLog[]
+}
+
+interface CreatedInvitation {
+  id: number
+  email: string
+  role: 'STUDENT' | 'PARENT' | 'TEACHER'
+  expiresAt: string
+  invitationUrl: string
+}
+interface AccountInvitation {
+  id: number
+  email: string
+  firstName: string
+  lastName: string
+  role: 'STUDENT' | 'PARENT' | 'TEACHER'
+  expiresAt: string
+  acceptedAt: string | null
+  revokedAt: string | null
+  createdAt: string
+  invitedBy: string
+  linkedAdmissionNumber: string | null
+  relationship: string | null
+}
+interface InvitationStudent {
+  id: number
+  admissionNumber: string
+  firstName: string
+  lastName: string
+  status: string
+  className: string | null
+  streamName: string | null
 }
 
 interface SchoolSettings {
@@ -72,7 +109,7 @@ interface AuditLog {
   actor: string | null
 }
 
-type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'operations' | 'settings' | 'announcements' | 'activity'
+type AdminSection = 'dashboard' | 'users' | 'academics' | 'students' | 'people' | 'operations' | 'settings' | 'announcements' | 'activity'
 
 const roles: UserRole[] = [
   'ADMIN',
@@ -144,6 +181,9 @@ function WorkspaceIcon({ name }: { name: AdminSection }) {
     case 'users':
       paths = <><circle cx="9" cy="8" r="3"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><path d="M16 5.3a3 3 0 0 1 0 5.8M18 14.2a4.5 4.5 0 0 1 3 4.3V20"/></>
       break
+    case 'people':
+      paths = <><circle cx="9" cy="8" r="3"/><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20"/><circle cx="17" cy="8" r="2.5"/><path d="M17 14a4 4 0 0 1 4 4v2"/></>
+      break
     case 'students':
       paths = <><path d="m3 9 9-5 9 5-9 5-9-5Z"/><path d="M6 11v5c3.5 3 8.5 3 12 0v-5M21 9v6"/></>
       break
@@ -170,6 +210,7 @@ const sectionDetails: Record<AdminSection, { title: string; description: string 
   dashboard: { title: 'Overview', description: 'Live operational snapshot of the school system.' },
   users: { title: 'Users & access', description: 'Manage school accounts, roles and account status.' },
   students: { title: 'Students & enrollment', description: 'Maintain student records and class enrollment.' },
+  people: { title: 'Parents, teachers & assignments', description: 'Create parent and teacher records, then assign teachers to classes, subjects and academic years.' },
   academics: { title: 'Academic structure', description: 'Configure academic years, terms, classes, streams and subjects.' },
   operations: { title: 'School operations', description: 'Manage attendance registers, assessments, timetable, fees and school communication.' },
   announcements: { title: 'Announcements', description: 'Publish and manage communication for the school community.' },
@@ -182,6 +223,7 @@ const sectionPaths: Record<AdminSection, string> = {
   users: '/admin/users',
   academics: '/admin/academics/years',
   students: '/admin/students/roster',
+  people: '/admin/people',
   operations: '/admin/operations/attendance',
   settings: '/admin/settings',
   announcements: '/admin/announcements',
@@ -214,6 +256,17 @@ export default function AdminApp() {
   const [error, setError] = useState('')
   const [oauthBusy, setOauthBusy] = useState(false)
   const [oauthProcessing, setOauthProcessing] = useState(() => hasGoogleCallback())
+  const [invitationEmail, setInvitationEmail] = useState('')
+  const [invitationStudentId, setInvitationStudentId] = useState('')
+  const [invitationRelationship, setInvitationRelationship] = useState('Parent/Guardian')
+  const [invitationUrl, setInvitationUrl] = useState('')
+  const [invitationBusy, setInvitationBusy] = useState(false)
+  const [invitationMessage, setInvitationMessage] = useState('')
+  const [invitationError, setInvitationError] = useState('')
+  const [invitations, setInvitations] = useState<AccountInvitation[]>([])
+  const [invitationStudents, setInvitationStudents] = useState<InvitationStudent[]>([])
+  const [loadingInvitations, setLoadingInvitations] = useState(false)
+  const [revokingInvitationId, setRevokingInvitationId] = useState<number | null>(null)
 
   useEffect(() => {
     const handleRouteChange = () => {
@@ -338,6 +391,45 @@ export default function AdminApp() {
     }
   }, [status, token])
 
+  useEffect(() => {
+    if (status !== 'ready' || !token) return
+    let active = true
+    setLoadingInvitations(true)
+    Promise.all([
+      request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token),
+      request<{ students: InvitationStudent[] }>('/api/admin/people/students', token),
+    ])
+      .then(([invitationResult, studentResult]) => {
+        if (!active) return
+        setInvitations(invitationResult.invitations)
+        setInvitationStudents(studentResult.students)
+      })
+      .catch((reason: unknown) => {
+        if (active) setInvitationError(reason instanceof Error ? reason.message : 'Unable to load invitation records')
+      })
+      .finally(() => { if (active) setLoadingInvitations(false) })
+    return () => { active = false }
+  }, [status, token])
+
+  useEffect(() => {
+    if (status !== 'ready' || !token) return
+    const refreshAdminRecords = () => {
+      Promise.all([
+        request<{ users: AdminUser[] }>('/api/admin/users', token),
+        request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token),
+        request<{ students: InvitationStudent[] }>('/api/admin/people/students', token),
+      ]).then(([userResult, invitationResult, studentResult]) => {
+        setUsers(userResult.users)
+        setInvitations(invitationResult.invitations)
+        setInvitationStudents(studentResult.students)
+      }).catch((reason: unknown) => {
+        setInvitationError(reason instanceof Error ? reason.message : 'Unable to refresh school account records')
+      })
+    }
+    window.addEventListener('murama:admin-data-changed', refreshAdminRecords)
+    return () => window.removeEventListener('murama:admin-data-changed', refreshAdminRecords)
+  }, [status, token])
+
   function signOut() {
     sessionStorage.removeItem(tokenKey)
     sessionStorage.removeItem(legacyTokenKey)
@@ -414,6 +506,76 @@ export default function AdminApp() {
       setError(reason instanceof Error ? reason.message : 'Unable to update this account')
     } finally {
       setBusyUserId(null)
+    }
+  }
+
+  const invitationCandidates = users.filter((account) => {
+    const active = account.isActive === true || account.isActive === 1
+    return !active && Boolean(account.email) && ['STUDENT', 'PARENT', 'TEACHER'].includes(account.role)
+  })
+  const selectedInvitationAccount = invitationCandidates.find((account) => account.email === invitationEmail)
+
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedInvitationAccount?.email) {
+      setInvitationError('Choose an eligible inactive student or parent account.')
+      return
+    }
+    if (selectedInvitationAccount.role === 'PARENT' && (!invitationStudentId || invitationRelationship.trim().length < 2)) {
+      setInvitationError('Parent invitations require a linked student and relationship.')
+      return
+    }
+
+    setInvitationBusy(true)
+    setInvitationError('')
+    setInvitationMessage('')
+    setInvitationUrl('')
+    try {
+      const result = await request<{ invitation: CreatedInvitation }>('/api/admin/invitations', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          email: selectedInvitationAccount.email,
+          ...(selectedInvitationAccount.role === 'PARENT'
+            ? { studentId: Number(invitationStudentId), relationship: invitationRelationship.trim() }
+            : {}),
+          expiresInHours: 48,
+        }),
+      })
+      setInvitationUrl(result.invitation.invitationUrl)
+      setInvitationMessage('Invitation created. Copy the link and share it privately with the intended account holder.')
+      const refreshed = await request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token)
+      setInvitations(refreshed.invitations)
+    } catch (reason) {
+      setInvitationError(reason instanceof Error ? reason.message : 'Unable to create invitation')
+    } finally {
+      setInvitationBusy(false)
+    }
+  }
+
+  async function revokeInvitation(invitationId: number) {
+    if (!token) return
+    setRevokingInvitationId(invitationId)
+    setInvitationError('')
+    setInvitationMessage('')
+    try {
+      await request('/api/admin/invitations/' + invitationId + '/revoke', token, { method: 'PATCH' })
+      const refreshed = await request<{ invitations: AccountInvitation[] }>('/api/admin/invitations', token)
+      setInvitations(refreshed.invitations)
+      setInvitationMessage('Invitation revoked. Its link can no longer activate the account.')
+    } catch (reason) {
+      setInvitationError(reason instanceof Error ? reason.message : 'Unable to revoke invitation')
+    } finally {
+      setRevokingInvitationId(null)
+    }
+  }
+
+  async function copyInvitationLink() {
+    if (!invitationUrl) return
+    try {
+      await navigator.clipboard.writeText(invitationUrl)
+      setInvitationMessage('Invitation link copied. Share it only with the intended account holder.')
+    } catch {
+      setInvitationMessage('Copy is unavailable in this browser. Select and copy the invitation link manually.')
     }
   }
 
@@ -506,6 +668,7 @@ export default function AdminApp() {
             ['students', 'Students & enrollment'],
             ['academics', 'Academic structure'],
             ['users', 'Users & access'],
+            ['people', 'Parents, teachers & assignments'],
           ] as const).map(([value, label]) => (
             <button type="button" key={value} className={'workspace-nav-item' + (section === value ? ' is-active' : '')} aria-current={section === value ? 'page' : undefined} onClick={() => { navigateSection(value) }}>
               <WorkspaceIcon name={value} /><span>{label}</span>
@@ -571,6 +734,58 @@ export default function AdminApp() {
                 <div><p className="admin-eyebrow">SCHOOL ADMINISTRATION</p><h2>User management</h2><p className="admin-muted">Review school accounts and manage access.</p></div>
                 <div className="admin-user-count" aria-label={users.length + ' accounts'}><strong>{users.length}</strong><span>accounts</span></div>
               </div>
+              <section className="admin-table-card invitation-create-card" aria-labelledby="invitations-create-heading">
+                <div className="admin-table-heading">
+                  <div><h2 id="invitations-create-heading">Secure account invitations</h2><p>Activate existing inactive student, parent and teacher accounts with a one-time link. No password is sent or stored in the link.</p></div>
+                  {loadingInvitations && <span className="admin-muted" aria-live="polite">Loading invitations…</span>}
+                </div>
+                <form className="invitation-create-form" onSubmit={createInvitation}>
+                  <label>Inactive school account
+                    <select value={invitationEmail} onChange={(event) => { setInvitationEmail(event.target.value); setInvitationUrl(''); setInvitationError(''); setInvitationMessage('') }} required>
+                      <option value="">Choose an account</option>
+                      {invitationCandidates.map((account) => <option key={account.id} value={account.email ?? ''}>{account.firstName} {account.lastName} · {account.email} · {account.role}</option>)}
+                    </select>
+                  </label>
+                  {selectedInvitationAccount?.role === 'PARENT' && <>
+                    <label>Linked student
+                      <select value={invitationStudentId} onChange={(event) => setInvitationStudentId(event.target.value)} required>
+                        <option value="">Choose the verified student record</option>
+                        {invitationStudents.map((student) => <option key={student.id} value={student.id}>{student.admissionNumber} · {student.firstName} {student.lastName}{student.className ? ' · ' + student.className : ''}</option>)}
+                      </select>
+                    </label>
+                    <label>Relationship to student
+                      <input value={invitationRelationship} onChange={(event) => setInvitationRelationship(event.target.value)} maxLength={50} required placeholder="Parent, guardian, mother, father…" />
+                    </label>
+                  </>}
+                  <button className="admin-quiet-button invitation-create-button" type="submit" disabled={invitationBusy || invitationCandidates.length === 0}>{invitationBusy ? 'Creating secure link…' : 'Create 48-hour invitation'}</button>
+                </form>
+                {invitationError && <p className="admin-alert invitation-feedback" role="alert">{invitationError}</p>}
+                {invitationMessage && <p className="invitation-feedback invitation-feedback-success" role="status">{invitationMessage}</p>}
+                {invitationUrl && <div className="invitation-link-output"><label>One-time invitation link<input readOnly value={invitationUrl} onFocus={(event) => event.currentTarget.select()} /></label><button className="admin-quiet-button" type="button" onClick={() => void copyInvitationLink()}>Copy link</button></div>}
+                {!invitationCandidates.length && <p className="admin-muted invitation-empty-note">There are no eligible inactive student, parent or teacher accounts with email addresses. Create the school record first, then issue an invitation.</p>}
+              </section>
+
+              <section className="admin-table-card invitation-history-card" aria-labelledby="invitation-history-heading">
+                <div className="admin-table-heading"><div><h2 id="invitation-history-heading">Invitation history</h2><p>Only status and expiry are shown here; invitation secrets are never listed.</p></div></div>
+                <div className="admin-table-scroll"><table>
+                  <thead><tr><th scope="col">Account</th><th scope="col">Role</th><th scope="col">Linked student</th><th scope="col">Created / expires</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+                  <tbody>
+                    {invitations.map((invitation) => {
+                      const invitationStatus = invitation.acceptedAt ? 'Accepted' : invitation.revokedAt ? 'Revoked' : new Date(invitation.expiresAt).getTime() <= Date.now() ? 'Expired' : 'Pending'
+                      return <tr key={invitation.id}>
+                        <td data-label="Account"><strong>{invitation.firstName} {invitation.lastName}</strong><small className="admin-cell-secondary">{invitation.email}</small></td>
+                        <td data-label="Role">{invitation.role}</td>
+                        <td data-label="Linked student">{invitation.linkedAdmissionNumber ? invitation.linkedAdmissionNumber + ' · ' + (invitation.relationship ?? 'Parent') : '—'}</td>
+                        <td data-label="Created / expires"><span>{formatDate(invitation.createdAt)}</span><small className="admin-cell-secondary">Expires {formatDate(invitation.expiresAt)}</small></td>
+                        <td data-label="Status"><span className={'admin-status ' + (invitationStatus === 'Pending' ? 'is-inactive' : 'is-active')}>{invitationStatus}</span></td>
+                        <td data-label="Action">{invitationStatus === 'Pending' ? <button className="admin-quiet-button" type="button" disabled={revokingInvitationId === invitation.id} onClick={() => void revokeInvitation(invitation.id)}>{revokingInvitationId === invitation.id ? 'Revoking…' : 'Revoke'}</button> : <span className="admin-cell-secondary">No action</span>}</td>
+                      </tr>
+                    })}
+                    {!loadingInvitations && invitations.length === 0 && <tr><td className="admin-empty" colSpan={6}>No invitations have been created yet.</td></tr>}
+                  </tbody>
+                </table></div>
+              </section>
+
               <section className="admin-table-card" aria-labelledby="users-heading">
                 <div className="admin-table-heading"><div><h2 id="users-heading">School accounts</h2><p>Role and account access changes are recorded in the audit trail.</p></div>{loadingUsers && <span className="admin-muted" aria-live="polite">Loading…</span>}</div>
                 <div className="admin-table-toolbar">
@@ -603,6 +818,7 @@ export default function AdminApp() {
           {section === 'settings' && token && <SettingsPanel token={token} />}
           {section === 'academics' && token && <AcademicPanel token={token} />}
           {section === 'students' && token && <StudentsPanel token={token} />}
+          {section === 'people' && token && <PeoplePanel token={token} />}
           {section === 'operations' && token && <OperationsPanel token={token} />}
           {section === 'announcements' && token && <AnnouncementsPanel token={token} />}
           {section === 'activity' && token && <ActivityPanel token={token} />}

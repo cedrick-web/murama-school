@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { Router } from 'express'
 import type { Response } from 'express'
 import type { PoolConnection } from '../config/database.js'
@@ -11,6 +12,8 @@ import directoryRoutes from './directory.routes.js'
 import { createSchoolUser, hashPassword, parsePassword, provisionableRoles } from '../services/school-users.js'
 import { requireAuth, requireRole, type AuthenticatedRequest } from '../middleware/auth.js'
 import type { UserRole } from '../types/auth.js'
+import { createSignedMediaReadUrl, createSignedMediaUpload, deleteStoredMedia, StorageConfigurationError, StorageServiceError, storedMediaObjectExists, verifyUploadedMedia } from '../services/supabase-storage.service.js'
+import { validateMediaUpload } from '../services/media-upload-policy.js'
 
 const router = Router()
 const validRoles: UserRole[] = [
@@ -187,6 +190,195 @@ router.get('/users', async (_req, res) => {
     res.json({ success: true, users: rows })
   } catch (error) {
     fail(res, 'load users', error)
+  }
+})
+
+router.get('/invitations', async (_req, res) => {
+  try {
+    const [rows] = await pool.execute(
+      "SELECT i.id, u.email, u.first_name AS firstName, u.last_name AS lastName, r.name AS role, i.expires_at AS expiresAt, i.accepted_at AS acceptedAt, i.revoked_at AS revokedAt, i.created_at AS createdAt, CONCAT_WS(' ', inviter.first_name, inviter.last_name) AS invitedBy, s.admission_number AS linkedAdmissionNumber, i.relationship FROM account_invitations i INNER JOIN users u ON u.id = i.user_id INNER JOIN roles r ON r.id = u.role_id INNER JOIN users inviter ON inviter.id = i.invited_by LEFT JOIN students s ON s.id = i.linked_student_id ORDER BY i.created_at DESC LIMIT 100",
+    )
+    res.json({ success: true, invitations: rows })
+  } catch (error) {
+    fail(res, 'load invitations', error)
+  }
+})
+
+router.post('/invitations', async (req: AuthenticatedRequest, res) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : ''
+  const rawStudentId = req.body?.studentId
+  const studentId = typeof rawStudentId === 'number' && Number.isSafeInteger(rawStudentId) && rawStudentId > 0
+    ? rawStudentId
+    : typeof rawStudentId === 'string'
+      ? parseUserId(rawStudentId)
+      : null
+  const relationship = typeof req.body?.relationship === 'string'
+    ? req.body.relationship.trim().slice(0, 50)
+    : ''
+  const rawHours = req.body?.expiresInHours
+  const expiresInHours = rawHours === undefined ? 48 : Number(rawHours)
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ success: false, message: 'Provide a valid email address for an existing inactive school account' })
+    return
+  }
+  if (!Number.isInteger(expiresInHours) || expiresInHours < 1 || expiresInHours > 168) {
+    res.status(400).json({ success: false, message: 'Invitation expiry must be between 1 and 168 hours' })
+    return
+  }
+
+  let baseUrl: URL
+  try {
+    baseUrl = new URL(process.env.FRONTEND_URL?.trim() || 'http://localhost:5173')
+  } catch {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must be a valid absolute URL' })
+    return
+  }
+  if (!['http:', 'https:'].includes(baseUrl.protocol)) {
+    res.status(500).json({ success: false, message: 'FRONTEND_URL must use HTTP or HTTPS' })
+    return
+  }
+
+  const token = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(token).digest('hex')
+  const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000)
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [userRows] = await connection.execute(
+        'SELECT u.id, u.email, u.is_active AS isActive, r.name AS role FROM users u INNER JOIN roles r ON r.id = u.role_id WHERE LOWER(u.email) = ? LIMIT 1 FOR UPDATE',
+        [email],
+      )
+      const target = (userRows as Record<string, unknown>[])[0]
+      if (!target) return { ok: false as const, status: 404, message: 'No school account exists for this email' }
+      if (Boolean(target.isActive)) return { ok: false as const, status: 409, message: 'This school account is already active' }
+      if (!['STUDENT', 'PARENT', 'TEACHER'].includes(String(target.role))) {
+        return { ok: false as const, status: 409, message: 'Invitations currently support existing student, parent and teacher accounts only' }
+      }
+
+      let linkedStudentId: number | null = null
+      let parentRelationship: string | null = null
+      if (target.role === 'STUDENT') {
+        if (studentId !== null || relationship) {
+          return { ok: false as const, status: 400, message: 'Student invitations do not accept parent-link fields' }
+        }
+        const [studentRows] = await connection.execute(
+          'SELECT id FROM students WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(studentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The student account is not linked to a student record' }
+        }
+      } else if (target.role === 'PARENT') {
+        if (!studentId || relationship.length < 2) {
+          return { ok: false as const, status: 400, message: 'Parent invitations require a linked student ID and relationship' }
+        }
+        const [parentRows] = await connection.execute(
+          'SELECT id FROM parents WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(parentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The parent account is not linked to a parent record' }
+        }
+        const [studentRows] = await connection.execute(
+          'SELECT id FROM students WHERE id = ? LIMIT 1',
+          [studentId],
+        )
+        if (!(studentRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 404, message: 'The selected student record was not found' }
+        }
+        linkedStudentId = studentId
+        parentRelationship = relationship
+      } else {
+        if (studentId !== null || relationship) {
+          return { ok: false as const, status: 400, message: 'Teacher invitations do not accept parent-link fields' }
+        }
+        const [teacherRows] = await connection.execute(
+          'SELECT id FROM teachers WHERE user_id = ? LIMIT 1',
+          [Number(target.id)],
+        )
+        if (!(teacherRows as Record<string, unknown>[]).length) {
+          return { ok: false as const, status: 409, message: 'The teacher account is not linked to a teacher record' }
+        }
+      }
+
+      await connection.execute(
+        'UPDATE account_invitations SET revoked_at = CURRENT_TIMESTAMP WHERE user_id = ? AND accepted_at IS NULL AND revoked_at IS NULL',
+        [Number(target.id)],
+      )
+      const [insertResult] = await connection.execute(
+        'INSERT INTO account_invitations (user_id, invited_by, token_hash, linked_student_id, relationship, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [Number(target.id), req.user!.id, tokenHash, linkedStudentId, parentRelationship, expiresAt.toISOString()],
+      )
+      const invitationId = Number((insertResult as { insertId: number }).insertId)
+      await writeAuditLog(connection, req, 'ACCOUNT_INVITATION_CREATED', 'account_invitation', invitationId, {
+        targetUserId: Number(target.id),
+        role: String(target.role),
+        expiresAt: expiresAt.toISOString(),
+        linkedStudentId,
+      })
+      return {
+        ok: true as const,
+        status: 201,
+        message: 'Invitation created',
+        invitationId,
+        email: String(target.email),
+        role: String(target.role),
+      }
+    })
+
+    if (!result.ok) {
+      res.status(result.status).json({ success: false, message: result.message })
+      return
+    }
+
+    const invitationUrl = new URL('/invite', baseUrl.origin)
+    invitationUrl.hash = new URLSearchParams({ token }).toString()
+    res.status(201).json({
+      success: true,
+      invitation: {
+        id: result.invitationId,
+        email: result.email,
+        role: result.role,
+        expiresAt: expiresAt.toISOString(),
+        invitationUrl: invitationUrl.toString(),
+      },
+      message: 'Invitation created. Copy and share this one-time link securely; the raw token is not stored.',
+    })
+  } catch (error) {
+    fail(res, 'create account invitation', error)
+  }
+})
+
+router.patch('/invitations/:invitationId/revoke', async (req: AuthenticatedRequest, res) => {
+  const invitationId = parseUserId(req.params.invitationId)
+  if (!invitationId) {
+    res.status(400).json({ success: false, message: 'A valid invitation ID is required' })
+    return
+  }
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, user_id AS userId, accepted_at AS acceptedAt, revoked_at AS revokedAt FROM account_invitations WHERE id = ? FOR UPDATE',
+        [invitationId],
+      )
+      const invitation = (rows as Record<string, unknown>[])[0]
+      if (!invitation) return { status: 404, message: 'Invitation not found' }
+      if (invitation.acceptedAt) return { status: 409, message: 'An accepted invitation cannot be revoked' }
+      if (invitation.revokedAt) return { status: 200, message: 'Invitation is already revoked' }
+      await connection.execute(
+        'UPDATE account_invitations SET revoked_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [invitationId],
+      )
+      await writeAuditLog(connection, req, 'ACCOUNT_INVITATION_REVOKED', 'account_invitation', invitationId, {
+        targetUserId: Number(invitation.userId),
+      })
+      return { status: 200, message: 'Invitation revoked' }
+    })
+    res.status(result.status).json({ success: result.status < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'revoke account invitation', error)
   }
 })
 
@@ -549,6 +741,277 @@ router.delete('/announcements/:announcementId', async (req: AuthenticatedRequest
     res.status(result.status).json({ success: result.status < 400, message: result.message })
   } catch (error) {
     fail(res, 'delete announcement', error)
+  }
+})
+
+
+
+function mediaExtension(mimeType: string): string {
+  const extensions: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/webp': '.webp',
+    'image/avif': '.avif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+  }
+  return extensions[mimeType] ?? ''
+}
+
+router.get('/media', async (req: AuthenticatedRequest, res) => {
+  const status = req.query.status === undefined ? null : String(req.query.status).trim().toUpperCase()
+  if (status !== null && !['UPLOADING', 'READY', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Invalid media status filter' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, alt_text AS altText, description, category, media_type AS mediaType, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, uploaded_by AS uploadedBy, published_at AS publishedAt, created_at AS createdAt, updated_at AS updatedAt FROM school_media_items WHERE (? IS NULL OR status = ?) ORDER BY created_at DESC LIMIT 200',
+      [status, status],
+    )
+    const media = await Promise.all((rows as Record<string, unknown>[]).map(async (item) => ({
+      ...item,
+      publicUrl: item.status === 'UPLOADING' ? null : await createSignedMediaReadUrl(String(item.objectPath)),
+      canComplete: Number(item.uploadedBy) === req.user!.id,
+    })))
+    res.json({ success: true, media })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError) {
+      res.status(503).json({ success: false, message: 'School media storage is not configured on the server yet.' })
+      return
+    }
+    if (error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to create secure preview URLs for school media.' })
+      return
+    }
+    fail(res, 'load school media', error)
+  }
+})
+
+router.post('/media/upload-intent', async (req: AuthenticatedRequest, res) => {
+  const media = validateMediaUpload(req.body ?? {})
+  if (!media) {
+    res.status(400).json({
+      success: false,
+      message: 'Provide a title, image alt text when applicable, valid media category, allowed image/video type, and file size up to 25 MB.',
+    })
+    return
+  }
+
+  const { title, altText, description, category, mimeType, sizeBytes, mediaType } = media
+  const objectPath = randomUUID() + mediaExtension(mimeType)
+  let mediaId: number | null = null
+  try {
+    const [insertResult] = await pool.execute(
+      'INSERT INTO school_media_items (title, alt_text, description, category, media_type, object_path, mime_type, size_bytes, status, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, altText, description, category, mediaType, objectPath, mimeType, sizeBytes, 'UPLOADING', req.user!.id],
+    )
+    mediaId = Number((insertResult as { insertId: number }).insertId)
+    const uploadToken = await createSignedMediaUpload(objectPath)
+    res.status(201).json({
+      success: true,
+      upload: {
+        mediaId,
+        objectPath,
+        uploadToken,
+        mediaType,
+        expiresInSeconds: 7200,
+      },
+      message: 'Upload token created. Complete the upload to save the media item for review.',
+    })
+  } catch (error) {
+    if (mediaId !== null) {
+      try { await pool.execute('DELETE FROM school_media_items WHERE id = ? AND status = ?', [mediaId, 'UPLOADING']) }
+      catch (cleanupError) { console.error('Unable to clean up incomplete media upload record', cleanupError) }
+    }
+    if (error instanceof StorageConfigurationError) {
+      res.status(503).json({ success: false, message: 'School media storage is not configured on the server yet.' })
+      return
+    }
+    if (error instanceof StorageServiceError) {
+      console.error('Unable to create signed media upload', error)
+      res.status(502).json({ success: false, message: 'Unable to prepare the media upload with Supabase Storage.' })
+      return
+    }
+    fail(res, 'prepare media upload', error)
+  }
+})
+
+router.post('/media/:mediaId/complete', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  if (!mediaId) {
+    res.status(400).json({ success: false, message: 'A valid media ID is required' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status, uploaded_by AS uploadedBy FROM school_media_items WHERE id = ? LIMIT 1',
+      [mediaId],
+    )
+    const media = (rows as Record<string, unknown>[])[0]
+    if (!media || Number(media.uploadedBy) !== req.user!.id) {
+      res.status(404).json({ success: false, message: 'Media upload not found' })
+      return
+    }
+    if (media.status !== 'UPLOADING') {
+      res.status(409).json({ success: false, message: 'This media upload has already been completed or is no longer uploadable' })
+      return
+    }
+    const verified = await verifyUploadedMedia(String(media.objectPath), String(media.mimeType), Number(media.sizeBytes))
+    if (!verified) {
+      res.status(409).json({ success: false, message: 'The uploaded file could not be verified. Check that the upload finished and retry.' })
+      return
+    }
+
+    await withTransaction(async (connection) => {
+      await connection.execute(
+        'UPDATE school_media_items SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = ? AND uploaded_by = ?',
+        ['READY', mediaId, 'UPLOADING', req.user!.id],
+      )
+      await writeAuditLog(connection, req, 'SCHOOL_MEDIA_UPLOADED', 'school_media_item', mediaId, {
+        mimeType: String(media.mimeType),
+        sizeBytes: Number(media.sizeBytes),
+      })
+    })
+    res.json({ success: true, message: 'Media upload verified and saved for administrator review' })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError || error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to verify the media upload with Supabase Storage.' })
+      return
+    }
+    fail(res, 'complete media upload', error)
+  }
+})
+
+router.patch('/media/:mediaId/status', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  const status = typeof req.body?.status === 'string' ? req.body.status.trim().toUpperCase() : ''
+  if (!mediaId || !['READY', 'PUBLISHED', 'ARCHIVED'].includes(status)) {
+    res.status(400).json({ success: false, message: 'Provide a valid media ID and status' })
+    return
+  }
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, title, status FROM school_media_items WHERE id = ? FOR UPDATE',
+        [mediaId],
+      )
+      const media = (rows as Record<string, unknown>[])[0]
+      if (!media) return { statusCode: 404, message: 'Media item not found' }
+      if (media.status === 'UPLOADING') return { statusCode: 409, message: 'Complete and verify the upload before changing its status' }
+      await connection.execute(
+        'UPDATE school_media_items SET status = ?, published_at = CASE WHEN ? = ? THEN COALESCE(published_at, CURRENT_TIMESTAMP) ELSE NULL END, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, status, 'PUBLISHED', mediaId],
+      )
+      await writeAuditLog(connection, req, status === 'PUBLISHED' ? 'SCHOOL_MEDIA_PUBLISHED' : 'SCHOOL_MEDIA_STATUS_CHANGED', 'school_media_item', mediaId, {
+        title: String(media.title),
+        previousStatus: String(media.status),
+        status,
+      })
+      return { statusCode: 200, message: status === 'PUBLISHED' ? 'Media published to the public school gallery' : 'Media status updated' }
+    })
+    res.status(result.statusCode).json({ success: result.statusCode < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'update school media status', error)
+  }
+})
+
+router.delete('/media/:mediaId', async (req: AuthenticatedRequest, res) => {
+  const mediaId = parseUserId(req.params.mediaId)
+  if (!mediaId) {
+    res.status(400).json({ success: false, message: 'A valid media ID is required' })
+    return
+  }
+  try {
+    const [rows] = await pool.execute(
+      'SELECT id, title, object_path AS objectPath, mime_type AS mimeType, size_bytes AS sizeBytes, status FROM school_media_items WHERE id = ? LIMIT 1',
+      [mediaId],
+    )
+    const media = (rows as Record<string, unknown>[])[0]
+    if (!media) {
+      res.status(404).json({ success: false, message: 'Media item not found' })
+      return
+    }
+    const objectExists = media.status !== 'UPLOADING' || await storedMediaObjectExists(String(media.objectPath))
+    if (objectExists) await deleteStoredMedia(String(media.objectPath))
+    await withTransaction(async (connection) => {
+      await writeAuditLog(connection, req, 'SCHOOL_MEDIA_DELETED', 'school_media_item', mediaId, {
+        title: String(media.title),
+        previousStatus: String(media.status),
+      })
+      await connection.execute('DELETE FROM school_media_items WHERE id = ?', [mediaId])
+    })
+    res.json({ success: true, message: 'Media item and stored file deleted' })
+  } catch (error) {
+    if (error instanceof StorageConfigurationError || error instanceof StorageServiceError) {
+      res.status(502).json({ success: false, message: 'Unable to delete the stored media file.' })
+      return
+    }
+    fail(res, 'delete school media', error)
+  }
+})
+
+const visitStatuses = ['NEW', 'CONTACTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+
+router.get('/visits', async (req, res) => {
+  const status = req.query.status === undefined ? null : String(req.query.status).trim().toUpperCase()
+  if (status !== null && !visitStatuses.includes(status as typeof visitStatuses[number])) {
+    res.status(400).json({ success: false, message: 'Invalid visit request status filter' })
+    return
+  }
+
+  try {
+    const [rows] = await pool.execute(
+      'SELECT v.id, v.full_name AS fullName, v.email, v.phone, v.visitor_type AS visitorType, v.preferred_date AS preferredDate, v.preferred_time AS preferredTime, v.purpose, v.status, v.response_note AS responseNote, v.handled_at AS handledAt, v.created_at AS createdAt, v.updated_at AS updatedAt, CONCAT_WS(\' \', handler.first_name, handler.last_name) AS handledBy FROM school_visit_requests v LEFT JOIN users handler ON handler.id = v.handled_by WHERE (? IS NULL OR v.status = ?) ORDER BY CASE v.status WHEN \'NEW\' THEN 0 WHEN \'CONTACTED\' THEN 1 WHEN \'CONFIRMED\' THEN 2 ELSE 3 END, v.preferred_date, v.created_at DESC LIMIT 200',
+      [status, status],
+    )
+    res.json({ success: true, requests: rows })
+  } catch (error) {
+    fail(res, 'load school visit requests', error)
+  }
+})
+
+router.patch('/visits/:requestId', async (req: AuthenticatedRequest, res) => {
+  const requestId = parseUserId(req.params.requestId)
+  const status = typeof req.body?.status === 'string' ? req.body.status.trim().toUpperCase() : ''
+  const responseNote = req.body?.responseNote === undefined || req.body?.responseNote === null
+    ? null
+    : typeof req.body.responseNote === 'string'
+      ? req.body.responseNote.trim()
+      : undefined
+
+  if (!requestId || !visitStatuses.includes(status as typeof visitStatuses[number]) || responseNote === undefined || (responseNote !== null && responseNote.length > 3000)) {
+    res.status(400).json({
+      success: false,
+      message: 'Provide a valid visit request ID, status and response note up to 3000 characters',
+    })
+    return
+  }
+
+  try {
+    const result = await withTransaction(async (connection) => {
+      const [rows] = await connection.execute(
+        'SELECT id, status FROM school_visit_requests WHERE id = ? FOR UPDATE',
+        [requestId],
+      )
+      const existing = (rows as Record<string, unknown>[])[0]
+      if (!existing) return { statusCode: 404, message: 'Visit request not found' }
+
+      await connection.execute(
+        'UPDATE school_visit_requests SET status = ?, response_note = ?, handled_by = ?, handled_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [status, responseNote, req.user!.id, requestId],
+      )
+      await writeAuditLog(connection, req, 'SCHOOL_VISIT_REQUEST_UPDATED', 'school_visit_request', requestId, {
+        previousStatus: String(existing.status),
+        status,
+        hasResponseNote: Boolean(responseNote),
+      })
+      return { statusCode: 200, message: 'Visit request updated' }
+    })
+
+    res.status(result.statusCode).json({ success: result.statusCode < 400, message: result.message })
+  } catch (error) {
+    fail(res, 'update school visit request', error)
   }
 })
 

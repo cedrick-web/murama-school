@@ -64,8 +64,16 @@ function profileFor(user: {
   }
 }
 
+const googleReturnKey = 'murama-google-return-path'
+
 export async function startGoogleSignIn(): Promise<void> {
   const supabase = getSupabaseClient()
+  const portalPath = ['/admin', '/teacher', '/portal'].find((path) => (
+    window.location.pathname === path || window.location.pathname.startsWith(path + '/')
+  ))
+  if (portalPath) window.sessionStorage.setItem(googleReturnKey, portalPath)
+  else window.sessionStorage.removeItem(googleReturnKey)
+  // Keep one allow-listed callback, even when sign-in starts in a role portal.
   const redirectTo = new URL('/signin', window.location.origin).toString()
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -117,6 +125,22 @@ export async function finishGoogleSignIn(code: string): Promise<VerifiedSchoolLo
 
 export function cleanGoogleCallbackUrl(): void {
   window.history.replaceState({}, document.title, '/signin')
+}
+
+/** Restore only a known portal appropriate to the server-verified school role. */
+export function restoreGooglePortalSession(user: SchoolUser, token: string): string | null {
+  const requestedPath = window.sessionStorage.getItem(googleReturnKey)
+  window.sessionStorage.removeItem(googleReturnKey)
+  const destination = requestedPath === '/admin' && ['ADMIN', 'HEADTEACHER'].includes(user.role)
+    ? { path: '/admin', tokenKey: 'murama-session-token' }
+    : requestedPath === '/teacher' && user.role === 'TEACHER'
+      ? { path: '/teacher', tokenKey: 'murama-teacher-token' }
+      : requestedPath === '/portal' && ['STUDENT', 'PARENT'].includes(user.role)
+        ? { path: '/portal', tokenKey: 'murama-portal-token' }
+        : null
+  if (!destination) return null
+  window.sessionStorage.setItem(destination.tokenKey, token)
+  return destination.path
 }
 
 export function getGoogleCallbackError(): string | null {

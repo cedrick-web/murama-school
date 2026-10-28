@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { homePathFor, useAuth } from '@/lib/auth'
-import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, startGoogleSignIn } from '@/lib/supabase-auth'
+import { cleanGoogleCallbackUrl, finishGoogleSignIn, getGoogleCallbackError, restoreGooglePortalSession, startGoogleSignIn } from '@/lib/supabase-auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -30,7 +30,14 @@ export default function SignInPage() {
       return
     }
     finishGoogleSignIn(code)
-      .then((result) => completeSession(result.token))
+      .then(async (result) => {
+        const portalPath = restoreGooglePortalSession(result.user, result.token)
+        if (portalPath) {
+          window.location.replace(portalPath)
+          return
+        }
+        await completeSession(result.token)
+      })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : 'Unable to finish Google sign-in')
       })
